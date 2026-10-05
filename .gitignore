@@ -27,3 +27,4 @@ server/dashboard/dist/
 .vscode/
 .ipynb_checkpoints/
 
+ai/**/*.pt
