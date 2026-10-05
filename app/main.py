@@ -25,6 +25,8 @@ def create_alert(alert: Alert):
         "message": "Alerte reçue",
         "data": alert
     }
+
+    
 # GET des alertes
 @app.get("/api/v1/alerts")
 def get_alerts():
