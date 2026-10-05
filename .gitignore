@@ -1,0 +1,31 @@
+# Secrets
+.env
+*.env.local
+firmware/include/secrets.h
+pki/out/
+*.key
+*.pem
+*.crt
+*.csr
+*.srl
+server/mosquitto/config/passwd
+
+# Données et modèles lourds
+ai/data/
+ai/**/models/*.onnx
+ai/**/models/*.pt
+*.pcap
+
+# Build / env
+__pycache__/
+*.pyc
+.venv/
+venv/
+bar_saas_venv/
+node_modules/
+server/dashboard/dist/
+.pio/
+.vscode/
+.ipynb_checkpoints/
+
+
