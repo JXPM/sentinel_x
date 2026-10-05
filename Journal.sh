@@ -17,8 +17,3 @@ git add .
 git commit -m "maj sh"
 git push origin main
 
-
-
-
-Je réalise un Saas de restauration et bar. Je veux permettre de passer commande et de payer les commandes via MTNMoney et aussi ermettre au proprio de bar de payer leur abonnement au Saas via MTNMoney également
-

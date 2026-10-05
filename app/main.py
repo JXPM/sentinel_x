@@ -1,12 +1,15 @@
+from datetime import datetime, timezone
+from typing import Literal
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 app = FastAPI()
 
-#GET 
+/*GET*/
 @app.get("/")
 def root():
-    return {"message": "Sentinel-X API fonctionne"}
+      return {"message": "Sentinel-X API fonctionne"}
 
 
 class Alert(BaseModel):
@@ -15,19 +18,10 @@ class Alert(BaseModel):
     gas: float
     presence: bool
 
-alerts = []
-
-#POST
+/*POST*/
 @app.post("/api/v1/alerts")
 def create_alert(alert: Alert):
-    alerts.append(alert)
     return {
         "message": "Alerte reçue",
         "data": alert
     }
-
-    
-# GET des alertes
-@app.get("/api/v1/alerts")
-def get_alerts():
-    return alerts
