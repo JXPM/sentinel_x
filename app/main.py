@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-/*GET*/
+#GET 
 @app.get("/")
 def root():
     return {"message": "Sentinel-X API fonctionne"}
@@ -15,10 +15,17 @@ class Alert(BaseModel):
     gas: float
     presence: bool
 
-/*POST*/
+alerts = []
+
+#POST
 @app.post("/api/v1/alerts")
 def create_alert(alert: Alert):
+    alerts.append(alert)
     return {
         "message": "Alerte reçue",
         "data": alert
     }
+# GET des alertes
+@app.get("/api/v1/alerts")
+def get_alerts():
+    return alerts
