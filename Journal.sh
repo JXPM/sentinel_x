@@ -14,7 +14,7 @@ git push --set-upstream origin main
 #fichier Maj et push
 git status
 git add .
-git commit -m "Ajout de requierements"
+git commit -m "Ajout de obsidian"
 git push origin main
 
 
