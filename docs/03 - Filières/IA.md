@@ -10,21 +10,49 @@ tags: [filière, ia]
 ## 1. Vision : détection humaine (`ai/vision/`)
 ### Pipeline
 ```
-webcam 640x480 MJPG → resize 320x320 → ONNX Runtime (YOLOv8n) → NMS → classe person ≥ 0,5
-   → confirmation sur 3 trames → POST /api/v1/alerts (type=intrusion) + anti-rebond de 10 s
-   → trame annotée → flux MJPEG :8081/video
+webcam 640x480 MJPG → letterbox 320x320 → ONNX Runtime (YOLOv8n) → NMS
+   ├─ passe 1, image entière : personne ≥ 0,5 · objets dangereux ≥ 0,35 · objets d'information ≥ 0,4
+   ├─ passe 2, recadrage autour de la personne : objets tenus en main 2 à 3 fois plus grands
+   → confirmation sur 3 trames → POST /api/v1/alerts + anti-rebond de 10 s (une aggravation part tout de suite)
+   → serveur HTTP intégré :8081 → /video (MJPEG brut) et /video/status (JSON, lu 4 fois/s par le dashboard)
 ```
+
+### Niveaux d'alerte de la vision
+| Situation | Alerte envoyée | Bandeau du dashboard |
+|---|---|---|
+| Personne vue sur 3 trames | `intrusion` · warning · `reason: presence` | Présence détectée |
+| Présence continue ≥ 30 s (`--loiter`) | `intrusion` · warning · `reason: loitering` | Présence prolongée |
+| Sac, sac à dos ou valise **sans personne** ≥ 20 s (`--abandon`) | `anomaly` · warning · `reason: abandoned_object` | Objet abandonné |
+| Personne tenant un **couteau, des ciseaux ou une batte** (3 trames) | `intrusion` · **critical** · `reason: danger_object` | Objet dangereux détecté |
+| PIR + caméra à moins de 3 s (moteur de fusion de l'API) | `fusion` · critical | Intrusion confirmée |
+
+Objets d'information (téléphone, sac à dos, sac à main, valise, ordinateur) : encadrés en gris sur la vidéo, **jamais d'alerte** à eux seuls. Un objet dangereux posé sans personne ne déclenche rien. Le dashboard affiche « objet dangereux : ciseaux 0,62 », jamais « personne suspecte » : le système décrit ce qu'il voit, il ne juge pas la personne (argument éthique et RGPD pour le jury).
+
+### Lancer
+```bash
+cd ai/vision && source .venv/bin/activate
+python detect.py --list-cameras             # Linux : noms des caméras
+python detect.py --source c270              # Linux : caméra choisie par son nom
+python detect.py --source 1                 # Windows : par numéro (pas de recherche par nom)
+```
+Options utiles : `--no-show` (sans fenêtre), `--debug-objects` (meilleur score couteau/ciseaux/batte chaque seconde), `--obj-conf`, `--info-conf`, `--loiter`, `--abandon`, `--no-crop-pass`, `--port` (8081 par défaut, 0 = pas de flux), `--host` (127.0.0.1 par défaut ; 0.0.0.0 seulement si Caddy dans Docker doit joindre le flux). `SENTINEL_CAMERA` remplace `--source`, `SENTINEL_API_URL` et `SENTINEL_API_KEY` activent l'envoi des alertes.
+
+> [!warning] Numéro de caméra
+> Sous Linux, `/dev/videoN` change selon l'ordre de branchement : le 2026-10-06, la C270 était `/dev/video4` et `--source 1` ne s'ouvrait pas. D'où la recherche par nom. Sous Windows, vérifier le numéro le jour de la démo.
 ### Étapes
 > État au 2026-10-06 : branche `ia`. Option B : tourne sur le laptop serveur Windows, hors Docker ([[ADR-005 Option B laptop serveur]], section 7 de [[Serveur Windows (option B)]]).
 - [x] Export ONNX : `python export_model.py` → `models/yolov8n-320.onnx` (le `.pt` et le `.onnx` ne sont pas commités, chacun les régénère)
 - [x] `detect.py` : capture dans un thread (dernière trame), letterbox, inférence, NMS, classe person, confirmation sur 3 trames, anti-rebond de 10 s
-- [x] Testé avec la webcam du laptop (`--source 0`) et une webcam USB externe (`--source 1`)
-- [ ] Noter la latence mesurée : **__ ms** d'inférence, **__ FPS** (à remplir)
+- [x] Testé avec la webcam du laptop (`--source 0`) et la webcam USB Logitech C270 (`--source c270`)
+- [x] Latence mesurée sur le laptop de Johan (Linux, C270) : **≈ 29 ms** d'inférence, **≈ 31 ms / 32 FPS** par trame avec la passe 1 seule ; **≈ 44 ms / 22 FPS** quand la passe 2 tourne (personne dans le champ)
+- [x] Objets dangereux (couteau, ciseaux, batte) avec seconde passe sur la personne : **ciseaux détectés** au test du 2026-10-06 (sans la passe 2 : non détectés)
+- [x] Présence prolongée (`--loiter`) testée ; objets d'information et objet abandonné vérifiés à l'écran du dashboard
+- [ ] Tester l'objet abandonné avec un vrai sac (20 s sans personne)
 - [ ] Mesure de latence par étape, avec moyenne et p95 sur 200 trames → **tableau dans le dossier**
 - [x] Schéma `POST /api/v1/alerts` aligné entre `detect.py` et l'API d'Anne (testé : 201 si valide, 422 sinon)
 - [ ] Test de bout en bout `detect.py` → API (après fusion de `DevAnne` et `ia` dans `main`)
 - [ ] Lancer la vision sur le laptop **Windows** serveur et y mesurer la latence
-- [ ] Serveur MJPEG Flask avec dessin des boîtes, de la confiance et des ms/FPS en surimpression
+- [x] Serveur MJPEG intégré à `detect.py` (bibliothèque standard, sans Flask) : trames **brutes**, le HUD et les boîtes sont dessinés par le dashboard à partir de `/video/status`
 - [ ] Gestion d'erreur : webcam débranchée → alerte `device_offline` source vision, puis nouvelle tentative
 
 ### Optimisations si on dépasse 100 ms

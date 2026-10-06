@@ -56,13 +56,13 @@ Voir [[API REST et WebSocket]]. Points clés :
 ## Dashboard (`server/dashboard/`)
 Maquette de référence (charte UX + dashboard interactif) : [Sentinel-X — Charte & Dashboard](https://claude.ai/artifact/V8B5XLiRPXFKkVUgVRnQ1c). Le lien est privé tant qu'il n'est pas partagé depuis le menu **Share** de la page.
 
-Navigation par **onglets** dans la barre latérale. Toujours visibles en haut : titre de l'onglet, horloge « En direct », **bandeau d'état** (nominal / attention / critique) avec bouton d'action.
+Navigation par **onglets** dans la barre latérale. Toujours visibles en haut : titre de l'onglet, horloge « En direct », **bandeau d'état** (normal / attention / critique) avec bouton d'action.
 
 | Onglet | Contenu |
 |---|---|
 | Vue d'ensemble | 4 tuiles capteurs, **caméra avec HUD**, 3 dernières alertes, voyants du boîtier, Analyse IA (score, prévision, type d'incident) |
 | Capteurs | Tuiles + courbes température et gaz (10 dernières minutes) avec repères de référence |
-| Vision IA | Caméra en grand : `<img src="/video">` (MJPEG annoté), inférence, FPS, confirmation sur 3 images |
+| Vision IA | Caméra en grand : `<img src="/video">` (MJPEG brut de `detect.py`), HUD dessiné par le dashboard, inférence, FPS, confirmation sur 3 images |
 | Alertes | Historique complet, couleur selon la sévérité, acquittement unitaire ou global ; badge du nombre d'alertes dans le menu |
 | Commandes | Buzzer (pulse 2 s), LED verte et LED rouge (Auto / Allumée / Éteinte), réponse automatique on/off |
 | Système | ESP, Mosquitto, API, PostgreSQL, services vision et anomalies ; lien Grafana |
@@ -72,8 +72,15 @@ Surcouche dessinée **côté dashboard** par-dessus le flux MJPEG (CSS/SVG, pas 
 - coins de visée, réticule central, graduations latérales, ligne de balayage animée ;
 - `REC · CAM-01`, horloge, numéro d'image, modèle et latence (`YOLOv8n · ONNX 320 · 36 ms`) ;
 - cible : boîte à coins rouges, étiquette `PERSONNE 0,87 · TRK-01`, fiche « CIBLE VERROUILLÉE » (position, taille, état du PIR) ;
-- bandeau « PRÉSENCE DÉTECTÉE » puis « INTRUSION CONFIRMÉE · PIR + CAMÉRA » ; sans cible : « BALAYAGE · AUCUNE CIBLE ».
+- objets dangereux : cadre orange `CISEAUX 0,62` ; objets d'information : cadre gris en pointillés `TÉLÉPHONE 0,55` ;
+- bandeau du bas : « PRÉSENCE DÉTECTÉE · CONFIRMATION EN COURS », « PRÉSENCE CONFIRMÉE · CAMÉRA », « PRÉSENCE PROLONGÉE · 45 S », « OBJET DANGEREUX · CISEAUX », « OBJET ABANDONNÉ · 34 S », « INTRUSION CONFIRMÉE · PIR + CAMÉRA » ; sans cible : « BALAYAGE · AUCUNE CIBLE » ;
+- service vision arrêté : « CAMÉRA HORS LIGNE » avec la commande à lancer.
 
-Les coordonnées de la boîte viennent du service vision (champ `bbox` de l'événement) ; l'animation de balayage est désactivée si l'utilisateur a demandé la réduction des animations.
+Les boîtes viennent de `GET /video/status` (servi par `detect.py`, lu 4 fois par seconde, toutes les 2 s s'il ne répond pas) ; la caméra réelle est affichée en 4:3 pour que les boîtes tombent juste. L'animation de balayage est désactivée si l'utilisateur a demandé la réduction des animations.
+
+### Sources de données
+- `VITE_DATA_SOURCE=api` (**défaut**) : caméra via `detect.py`, alertes via l'API, capteurs via le WebSocket `/ws`. Tant que l'ESP n'envoie rien, les capteurs **rejouent `sensor_data.csv`** d'Oussama (une ligne par seconde, départ ligne 640 : dérive après ~2 min, pic de gaz après ~4 min). Score provisoire = écart au régime normal (lignes 0-699) en écarts-types, remplacé par le message `score` du service anomalies dès qu'il existe.
+- `VITE_DATA_SOURCE=mock` : simulation hors matériel avec sélecteur de scénario.
+- En dev, Vite relaie `/api` et `/ws` vers `:8000`, `/video` vers `:8081` (`SENTINEL_API`, `SENTINEL_VISION`). Les erreurs `ECONNREFUSED 127.0.0.1:8000` dans le terminal Vite veulent seulement dire que l'API n'est pas lancée.
 
 Règles : pas de CDN, pas de `v-html`, token stocké en mémoire (pas de `localStorage`), reconnexion WebSocket automatique.
