@@ -1,0 +1,5 @@
+# Uniquement pour exporter le modèle en ONNX (une fois, sur un laptop)
+# Installer d'abord torch CPU pour éviter ~2 Go de CUDA :
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+ultralytics>=8.2
+onnx>=1.16
