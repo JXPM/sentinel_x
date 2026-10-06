@@ -1,1 +1,53 @@
 @import "tailwindcss";
+
+body {
+  margin: 0;
+  background-color: #0F0F18;
+  color: #ECEBFF;
+  font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.sx-btn {
+  transition: background-color 150ms cubic-bezier(.2, .8, .2, 1),
+              border-color 150ms cubic-bezier(.2, .8, .2, 1),
+              transform 150ms cubic-bezier(.2, .8, .2, 1);
+  cursor: pointer;
+}
+.sx-btn:active {
+  transform: scale(.98);
+}
+.sx-btn:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.sx-pulse {
+  animation: sxPulse 1.6s ease-in-out infinite;
+}
+@keyframes sxPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 92, 122, .45); }
+  50% { box-shadow: 0 0 0 10px rgba(255, 92, 122, 0); }
+}
+
+.sx-live {
+  animation: sxBlink 2s ease-in-out infinite;
+}
+@keyframes sxBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+.sx-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: rgba(156, 149, 255, .55);
+  box-shadow: 0 0 14px 2px rgba(156, 149, 255, .35);
+  animation: sxScan 4s linear infinite;
+}
+@keyframes sxScan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}

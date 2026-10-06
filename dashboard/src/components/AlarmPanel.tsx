@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 // Types stricts TypeScript
 type AlertLevel = "NOMINAL" | "WARNING" | "CRITICAL";
@@ -215,7 +215,7 @@ export default function AlarmPanel() {
                     }`}
                   ></span>
                 </div>
-                <p className="text-xs text-slate-400 mb-4 min-h-[32px]">
+                <p className="text-xs text-slate-400 mb-4 min-h-8">
                   Émission sonore cadencée de haute intensité sur le boîtier.
                 </p>
                 <button
@@ -249,7 +249,7 @@ export default function AlarmPanel() {
                     }`}
                   ></span>
                 </div>
-                <p className="text-xs text-slate-400 mb-4 min-h-[32px]">
+                <p className="text-xs text-slate-400 mb-4 min-h-8">
                   Signal lumineux physique de dissuasion industrielle.
                 </p>
                 <button
@@ -272,7 +272,7 @@ export default function AlarmPanel() {
               </div>
               <button
                 onClick={() => triggerActuator("killswitch", false)}
-                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-mono text-xs font-black uppercase tracking-widest shadow-xl shadow-red-900/40 border border-red-400/40 active:scale-95 transition"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl bg-linear-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-mono text-xs font-black uppercase tracking-widest shadow-xl shadow-red-900/40 border border-red-400/40 active:scale-95 transition"
               >
                 🛑 Arrêt d'Urgence (Reset)
               </button>
@@ -386,13 +386,13 @@ export default function AlarmPanel() {
           </div>
 
           {/* HISTORIQUE DES ALARMES / LOGS EN DIRECT */}
-          <div className="bg-[#0B0F19] border border-cyan-500/20 rounded-2xl p-5 flex-1 flex flex-col min-h-[300px] shadow-2xl">
+          <div className="bg-[#0B0F19] border border-cyan-500/20 rounded-2xl p-5 flex-1 flex flex-col min-h-75 shadow-2xl">
             <h2 className="text-xs font-mono font-bold tracking-wider text-cyan-400 uppercase mb-3 pb-2 border-b border-slate-800 flex justify-between">
               <span>Journal des Incidents & Alertes</span>
               <span className="text-[10px] text-slate-500">Live Buffer</span>
             </h2>
 
-            <div className="space-y-2.5 overflow-y-auto flex-1 max-h-[320px] pr-1">
+            <div className="space-y-2.5 overflow-y-auto flex-1 max-h-80 pr-1">
               {events.map((evt) => (
                 <div
                   key={evt.id}

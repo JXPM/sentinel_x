@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, memo } from "react";
+import { useRef, useEffect, useState, memo } from "react";
 import type{ VisionInference } from "../types/telemetry";
 
 interface VideoFeedOverlayProps {
