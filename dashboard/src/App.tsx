@@ -1,78 +1,70 @@
-import React, { useState } from "react";
-import Dashboard from "./dashboard";
-import AlarmPanel from "./components/AlarmPanel";
+import { useEffect, useState } from 'react';
+import { AiAnalysis } from './components/AiAnalysis';
+import { AlertsPage } from './components/AlertsPage';
+import { CommandsPanel } from './components/CommandsPanel';
+import { OverviewSide } from './components/OverviewSide';
+import { ScenarioBar } from './components/ScenarioBar';
+import { SensorTiles } from './components/SensorTiles';
+import { Sidebar } from './components/Sidebar';
+import { TABS } from './lib/tabs';
+import { StatusBanner } from './components/StatusBanner';
+import { SystemPanel } from './components/SystemPanel';
+import { TopBar } from './components/TopBar';
+import { TrendCharts } from './components/TrendCharts';
+import { VisionCard } from './components/VisionCard';
+import { useSentinel } from './data/useSentinel';
+import type { TabId } from './types';
 
-type ActiveTab = "dashboard" | "alarms";
+// L'onglet actif est gardé dans l'URL (#alertes…) : rechargement et lien direct conservent la vue.
+const tabFromHash = (): TabId => {
+  const h = window.location.hash.slice(1);
+  return TABS.some((t) => t.id === h) ? (h as TabId) : 'supervision';
+};
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<ActiveTab>("dashboard");
+  const s = useSentinel();
+  const [tab, setTab] = useState<TabId>(tabFromHash);
+
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const goTo = (t: TabId) => {
+    window.history.replaceState(null, '', '#' + t);
+    setTab(t);
+  };
+
+  const title = TABS.find((t) => t.id === tab)?.title ?? '';
+  const unacked = s.alerts.filter((a) => !a.acked).length;
+
+  useEffect(() => { document.title = title + ' · Sentinel-X'; }, [title]);
 
   return (
-    // FOND BLEU PÉTROLE PROFOND ET VIBRANT
-    <div className="min-h-screen bg-[#0A1322] text-slate-100 font-sans flex flex-col selection:bg-cyan-500 selection:text-white">
-      {/* BARRE DE NAVIGATION CONTRASTÉE */}
-      <nav className="border-b border-cyan-500/25 bg-[#0F1B30]/90 backdrop-blur sticky top-0 z-50 shadow-lg shadow-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-300 font-mono font-black text-lg shadow-[0_0_15px_rgba(6,182,212,0.35)]">
-              SX
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-sm tracking-wider uppercase text-white">
-                  SENTINEL-X
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-cyan-400/70 block">
-                AetherCorp Industrial Command • 2050
-              </span>
-            </div>
+    <div className="shell">
+      <Sidebar tab={tab} onTab={goTo} unacked={unacked} sensors={s.sensors} />
+      <main className="content">
+        <TopBar title={title} s={s} />
+        {s.demo && <ScenarioBar value={s.demo.scenario} onChange={s.demo.setScenario} />}
+        <StatusBanner s={s} />
+        {s.commandError && <p className="error-line" role="alert">{s.commandError}</p>}
+
+        {(tab === 'supervision' || tab === 'capteurs') && <SensorTiles s={s} />}
+
+        {(tab === 'supervision' || tab === 'vision') && (
+          <div className="row">
+            <VisionCard s={s} />
+            {tab === 'supervision' && <OverviewSide s={s} onTab={goTo} />}
           </div>
+        )}
 
-          {/* Onglets tactiques */}
-          <div className="flex items-center gap-2 bg-[#09101C] p-1.5 rounded-xl border border-cyan-900/50">
-            <button
-              onClick={() => setCurrentTab("dashboard")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all ${
-                currentTab === "dashboard"
-                  ? "bg-cyan-500 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
-            >
-              <span>📊</span>
-              <span>DASHBOARD</span>
-            </button>
-
-            <button
-              onClick={() => setCurrentTab("alarms")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-xs font-bold transition-all ${
-                currentTab === "alarms"
-                  ? "bg-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.4)]"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-              }`}
-            >
-              <span className="inline-block w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
-              <span>ALARMES & ACTIONNEURS</span>
-            </button>
-          </div>
-
-          <div className="hidden md:flex items-center gap-2 font-mono text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/40 px-3 py-1.5 rounded-lg">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span>MQTTS / TLS SÉCURISÉ</span>
-          </div>
-
-        </div>
-      </nav>
-
-      {/* CONTENU ACTIF */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
-        {currentTab === "dashboard" ? <Dashboard /> : <AlarmPanel />}
+        {tab === 'supervision' && <AiAnalysis s={s} />}
+        {tab === 'capteurs' && <TrendCharts s={s} />}
+        {tab === 'alertes' && <AlertsPage s={s} />}
+        {tab === 'commandes' && <CommandsPanel s={s} />}
+        {tab === 'systeme' && <SystemPanel s={s} />}
       </main>
-
-      <footer className="border-t border-cyan-950/60 py-3 px-6 text-center text-[10px] font-mono text-slate-500">
-        EPSI WORKSHOP BAC+4 • CONSORTIUM GROUPE 14 • AETHERCORP DEFENSIVE UNIT
-      </footer>
     </div>
   );
 }
