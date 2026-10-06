@@ -1,64 +1,66 @@
 ---
 tags: [architecture]
 ---
-# 🏗️ Architecture globale (Option A : Raspberry Pi 5)
+# 🏗️ Architecture globale (option B : laptop Windows serveur)
 
 > [!summary] En une phrase
-> L'ESP8266 publie les mesures en **MQTTS** vers Mosquitto sur le **Pi 5**, qui sert aussi de **point d'accès Wi-Fi isolé**. L'API FastAPI stocke dans PostgreSQL et pousse en **WebSocket** vers le dashboard. Les services IA (vision et anomalies) lisent la webcam et la télémétrie, puis remontent leurs alertes via **`POST /api/v1/alerts`**. Les boutons du dashboard repartent en MQTT vers le buzzer et les LEDs.
+> L'ESP8266 publie les mesures en **MQTTS** vers Mosquitto sur le **laptop Windows serveur**, qui diffuse aussi le **Wi-Fi de démo** (point d'accès mobile, 192.168.137.1). L'API FastAPI stocke dans PostgreSQL et pousse en **WebSocket** vers le dashboard. Les services IA (vision et anomalies) lisent la webcam et la télémétrie, puis remontent leurs alertes via **`POST /api/v1/alerts`**. Les boutons du dashboard repartent en MQTT vers le buzzer et les LEDs.
+> Mise en place : [[Serveur Windows (option B)]]. Décision : [[ADR-005 Option B laptop serveur]].
 
 ## Schéma
 ```mermaid
 flowchart LR
   subgraph BOX["Boîtier Sentinel-X (impression 3D)"]
-    subgraph EDGE["Compartiment capteurs (ventilé, isolé du Pi)"]
-      DHT[DHT22] --> ESP
-      MQ2[MQ-2 + pont diviseur] --> ESP
-      PIR[PIR HC-SR501] --> ESP
-      ESP[ESP8266 NodeMCU<br/>192.168.10.10] --> OLED[OLED SSD1306]
-      ESP --> ACT[Buzzer + LEDs]
-    end
-    subgraph PI["Compartiment Raspberry Pi 5 (Active Cooler)"]
-      AP[wlan0 = point d'accès<br/>192.168.10.1]
-      CAM[Webcam USB]
-      subgraph DOCKER["Docker Compose"]
-        CADDY[Caddy :443]
-        MOSQ[Mosquitto :8883 TLS]
-        API[FastAPI]
-        DB[(PostgreSQL)]
-        VIS[vision : YOLOv8n ONNX]
-        ANO[anomaly : IsolationForest + RF]
-        MON[Prometheus + Grafana]
-      end
+    DHT[DHT22] --> ESP
+    MQ2[MQ-2 + pont diviseur] --> ESP
+    PIR[PIR HC-SR501] --> ESP
+    ESP[ESP8266 NodeMCU] --> OLED[OLED SSD1306]
+    ESP --> ACT[Buzzer + LEDs]
+    CAM[Webcam USB, sur le dessus]
+  end
+  subgraph LAP["Laptop Windows serveur, 192.168.137.1"]
+    AP[Point d'accès mobile 2,4 GHz]
+    VIS[vision : detect.py, Python natif]
+    subgraph DOCKER["Docker Desktop (WSL2)"]
+      CADDY[Caddy :443]
+      MOSQ[Mosquitto :8883 TLS]
+      API[FastAPI]
+      DB[(PostgreSQL)]
+      ANO[anomaly : IsolationForest + RF]
+      MON[Prometheus + Grafana]
     end
   end
   ESP -- "MQTTS 8883 sur WPA2" --> MOSQ
   MOSQ --> API
   API --> DB
   MOSQ --> ANO
-  CAM --> VIS
+  CAM -- "USB" --> VIS
   VIS -- "POST /api/v1/alerts" --> API
   ANO -- "POST /api/v1/alerts" --> API
   API -- "publie sentinel/sx-001/cmd" --> MOSQ
   MOSQ -- "cmd" --> ESP
-  LAP[Laptop superviseur<br/>192.168.10.100] -- "HTTPS + WSS" --> CADDY
+  DEMO[Laptop superviseur] -- "HTTPS + WSS" --> CADDY
   CADDY --> API
-  CADDY --> VIS
   CADDY --> MON
 ```
 
 ## Version texte (pour le PDF ou un tableau blanc)
 ```
- ┌──────────────────────── BOÎTIER SENTINEL-X ─────────────────────────┐
- │ [Capteurs]  DHT22 MQ-2 PIR ─► ESP8266 ─► OLED / Buzzer / LEDs       │
- │                                  │ Wi-Fi WPA2 + MQTTS:8883          │
- │                                  ▼                                  │
- │ [Raspberry Pi 5]  wlan0 AP 192.168.10.1     webcam USB              │
- │   Docker: mosquitto ─► api(FastAPI) ─► postgres                     │
- │            │   ▲            ▲   │WS                                 │
- │            ▼   │cmd         │   ▼                                   │
- │          anomaly ──POST──►  │  caddy:443 ◄── laptop (dashboard)     │
- │          vision  ──POST─────┘   prometheus / grafana                │
- └─────────────────────────────────────────────────────────────────────┘
+ ┌──────────── BOÎTIER SENTINEL-X ────────────┐
+ │ DHT22 MQ-2 PIR ─► ESP8266 ─► OLED/Buzzer/LEDs│
+ │ Webcam USB (dessus)                         │
+ └──────┬──────────────────────┬───────────────┘
+        │ Wi-Fi WPA2 2,4 GHz    │ câble USB
+        │ MQTTS:8883            │
+        ▼                       ▼
+ ┌────── LAPTOP WINDOWS SERVEUR 192.168.137.1 ──────┐
+ │ Point d'accès mobile        vision (Python natif) │
+ │ Docker: mosquitto ─► api(FastAPI) ─► postgres     │
+ │           │  ▲          ▲  │ WS                   │
+ │           ▼  │cmd       │  ▼                      │
+ │         anomaly ─POST─► │ caddy:443 ◄── dashboard │
+ │         vision ──POST───┘  prometheus/grafana     │
+ └───────────────────────────────────────────────────┘
 ```
 
 ## Les 5 flux à démontrer
@@ -73,7 +75,7 @@ flowchart LR
 ## Principes
 - **Un seul point d'entrée web** (Caddy :443) et **un seul point d'entrée IoT** (Mosquitto :8883). Rien d'autre n'est exposé.
 - Les services internes communiquent sur un réseau Docker `internal: true`.
-- Tout fonctionne **sans Internet**.
+- Tout fonctionne **sans Internet** (le point d'accès Windows partage la connexion du laptop si elle existe, mais rien n'en dépend).
 - **Fusion de capteurs**, notre point d'innovation : intrusion *confirmée* quand le PIR et YOLO concordent dans une fenêtre de 3 s ; *suspectée* si un seul des deux se déclenche.
 
 ## Liens

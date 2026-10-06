@@ -39,8 +39,8 @@ En 2050, **AetherCorp Industrial Solutions** exploite des micro-centrales isolé
 ## Matériel
 ESP8266 (1 ou 2), webcam USB, DHT22, MQ-2, PIR HC-SR501, OLED I2C 0,96", buzzers, LEDs, breadboards. Fablab : Creality K2 Plus (3D) et Falcon A1 (laser).
 
-## Option A, retenue : voir [[ADR-001 Option A Raspberry Pi 5]]
-Le Pi 5 (4 Go) est **fixé dans le boîtier**, exécute Docker Compose et l'IA vision ; la webcam est branchée dessus et l'ESP8266 s'y connecte en Wi-Fi.
+## Option B, retenue : voir [[ADR-005 Option B laptop serveur]]
+Un **laptop Windows** de l'équipe sert de serveur et de point d'accès : il exécute Docker Compose et l'IA vision ; la webcam y est branchée et l'ESP8266 s'y connecte en Wi-Fi. (L'option A, avec un Pi 5 dans le boîtier, a été abandonnée faute de Pi.)
 
 ## Fablab
 - Coque conçue **uniquement sous Fusion360**, OLED visible, passe-câbles propres, **aucun fil apparent**.

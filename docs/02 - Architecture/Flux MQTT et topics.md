@@ -26,7 +26,7 @@ tags: [architecture, mqtt, contrat]
 
 **status** (retained), avec un LWT identique à `"state":"offline"`
 ```json
-{"dev":"sx-001","state":"online","ip":"192.168.10.10","fw":"1.0.0"}
+{"dev":"sx-001","state":"online","ip":"192.168.137.23","fw":"1.0.0"}
 ```
 
 **cmd**

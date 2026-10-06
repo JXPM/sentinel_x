@@ -6,14 +6,16 @@ tags: [pilotage]
 
 | Membre | Filière | Briques possédées | Backup | Contact |
 |---|---|---|---|---|
-| Johan | IA | `ai/vision`, `ai/anomaly`, documentation IA | | |
-| | DEV | `firmware/`, `server/api`, `server/dashboard` | | |
-| | INFRA | Docker Compose, point d'accès, monitoring, image SD | | |
+| Johan | IA | `ai/vision`, intégration vision → API, documentation IA | Oussama | |
+| Oussama | IA | `ai/anomalies` (données, features, modèles) | Johan | |
+| Anne | DEV | API (`app/`), dashboard | | |
+| | DEV | `firmware/` | | |
+| | INFRA | Laptop serveur Windows, Docker Compose, point d'accès, monitoring | | |
 | | CYBER | PKI/TLS, durcissement, rapport d'audit, pentest | | |
 | | (au choix) | CAO Fusion360, laser, vidéo | | |
 
 ## Rôles transverses
-- **Intégrateur** : garant du `docker compose up` sur le Pi et du test de bout en bout chaque soir.
+- **Intégrateur** : garant du `docker compose up` sur le laptop serveur et du test de bout en bout chaque soir.
 - **Gardien du dépôt** : relit les PR et vérifie l'absence de secrets ([[Conventions Git]]).
 - **Maître du temps** : chronomètre les répétitions ([[Pitch et timing]]).
 - **Scribe** : met à jour le [[Planning de la semaine]] et le journal du jour.

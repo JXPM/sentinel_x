@@ -3,6 +3,8 @@ tags: [adr]
 status: accepté
 date: 2026-10-05
 ---
+> [!note] Option B : la vision tourne sur le laptop serveur, en Python natif ; le choix ONNX reste valable (léger, rapide, sans PyTorch à l'exécution).
+
 # ADR-004 : vision avec YOLOv8n en ONNX Runtime à 320 px
 
 ## Décision

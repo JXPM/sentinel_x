@@ -15,13 +15,15 @@ webcam 640x480 MJPG → resize 320x320 → ONNX Runtime (YOLOv8n) → NMS → cl
    → trame annotée → flux MJPEG :8081/video
 ```
 ### Étapes
-> État au 2026-10-05 : branche `ia/vision`. Option B : tourne sur le laptop, hors Docker ([[ADR-005 Option B laptop serveur]]).
+> État au 2026-10-06 : branche `ia`. Option B : tourne sur le laptop serveur Windows, hors Docker ([[ADR-005 Option B laptop serveur]], section 7 de [[Serveur Windows (option B)]]).
 - [x] Export ONNX : `python export_model.py` → `models/yolov8n-320.onnx` (le `.pt` et le `.onnx` ne sont pas commités, chacun les régénère)
 - [x] `detect.py` : capture dans un thread (dernière trame), letterbox, inférence, NMS, classe person, confirmation sur 3 trames, anti-rebond de 10 s
 - [x] Testé avec la webcam du laptop (`--source 0`) et une webcam USB externe (`--source 1`)
 - [ ] Noter la latence mesurée : **__ ms** d'inférence, **__ FPS** (à remplir)
 - [ ] Mesure de latence par étape, avec moyenne et p95 sur 200 trames → **tableau dans le dossier**
-- [ ] Brancher `SENTINEL_API_URL` / `SENTINEL_API_KEY` sur l'API du DEV dès qu'elle existe
+- [x] Schéma `POST /api/v1/alerts` aligné entre `detect.py` et l'API d'Anne (testé : 201 si valide, 422 sinon)
+- [ ] Test de bout en bout `detect.py` → API (après fusion de `DevAnne` et `ia` dans `main`)
+- [ ] Lancer la vision sur le laptop **Windows** serveur et y mesurer la latence
 - [ ] Serveur MJPEG Flask avec dessin des boîtes, de la confiance et des ms/FPS en surimpression
 - [ ] Gestion d'erreur : webcam débranchée → alerte `device_offline` source vision, puis nouvelle tentative
 
@@ -29,9 +31,14 @@ webcam 640x480 MJPG → resize 320x320 → ONNX Runtime (YOLOv8n) → NMS → cl
 Entrée 256 ; inférence 1 trame sur 2 ; capture dans un thread séparé (toujours traiter la **dernière** trame) ; quantification INT8 de l'ONNX (`onnxruntime.quantization`).
 
 ---
-## 2. Maintenance prédictive (`ai/anomaly/`)
+## 2. Maintenance prédictive (`ai/anomalies/`, Oussama)
+> État au 2026-10-06 :
+> - [x] `generate_sample_data.py` → `data/sensor_data.csv` : 1 000 mesures à 5 s, phase normale, dérive lente température + gaz (750–810), pic de gaz (900–910). `expected_scenario` sert **uniquement à l'évaluation**.
+> - [x] Notebook d'exploration (`test.ipynb`, à déplacer dans `ai/anomalies/notebooks/`) : courbes, contrôle de fréquence, features delta et moyenne glissante
+> - [ ] `train.py` (Isolation Forest), puis Random Forest et estimation du temps avant le niveau critique
+> - [ ] Remplacer les données synthétiques par ≥ 1 h de vraies mesures de l'ESP
 ### Données
-- **Normal** : ≥ 1 h de télémétrie mardi, **dans le boîtier final si possible** (voir [[Boîtier et thermique]]).
+- **Normal** : ≥ 1 h de télémétrie réelle, **dans le boîtier final si possible** (voir [[Boîtier et thermique]]).
 - **Scénarios**, enregistrés et étiquetés avec l'horodatage de début et de fin :
   | Scénario | Comment le reproduire en sécurité | Étiquette |
   |---|---|---|
@@ -79,4 +86,4 @@ Anomalie = `IsolationForest` prédit −1 sur **N fenêtres consécutives** (hys
 - [ ] Jeu de données : durée, scénarios, protocole, parts réelles et synthétiques
 - [ ] Features et justification
 - [ ] Modèles, hyperparamètres, métriques, matrice de confusion
-- [ ] Limites : dérive du MQ-2, taille réduite du jeu de données, influence de la chaleur du Pi
+- [ ] Limites : dérive du MQ-2, taille réduite du jeu de données, chaleur du MQ-2 sur le DHT22, part de données synthétiques

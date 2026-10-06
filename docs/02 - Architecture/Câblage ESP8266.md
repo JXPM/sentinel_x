@@ -12,8 +12,8 @@ tags: [architecture, hardware, dev]
 | MQ-2 | AO | **A0** via pont diviseur | ADC | ⚠️ AO peut monter à 5 V ; **diviseur 10 kΩ / 20 kΩ** → ≤ 3,3 V |
 | MQ-2 | VCC | VIN (5 V) | | La chauffe consomme environ 150 mA |
 | Buzzer actif | + | D6 | 12 | Via transistor NPN si le courant dépasse 12 mA |
-| LED rouge | anode | D8 | 15 | 220 Ω vers GND (D8 doit rester bas au boot, ce qui est compatible) |
-| LED verte | anode | D0 | 16 | 220 Ω vers GND |
+| LED rouge | anode | D8 | 15 | 220 Ω vers GND (D8 doit rester bas au boot, ce qui est compatible). Fixe = alerte, clignote = broker perdu |
+| LED verte | anode | D0 | 16 | 220 Ω vers GND. Fixe = connecté au broker MQTTS |
 
 > [!warning] Broches à éviter
 > D3 (GPIO0), D4 (GPIO2) et D8 (GPIO15) déterminent le mode de démarrage. Rien qui tire D3 ou D4 vers le bas au boot.
@@ -23,7 +23,7 @@ tags: [architecture, hardware, dev]
 > - Le capteur chauffe lui-même : l'éloigner du DHT22.
 
 ## Alimentation (option A)
-Le Pi 5 alimente l'ESP par **USB** (port USB du Pi → micro-USB du NodeMCU). Un seul câble sort du boîtier : l'alimentation 27 W du Pi.
+L'ESP est alimenté par **USB** (micro-USB du NodeMCU → laptop serveur ou chargeur 5 V). Il sort du boîtier avec le câble de la webcam, par un seul passe-câble ([[Boîtier et thermique]]).
 
 ## Schéma
 À réaliser sous **Fritzing** ou **Wokwi** pour le dossier PDF, et photographier la breadboard définitive.

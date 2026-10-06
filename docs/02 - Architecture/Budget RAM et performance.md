@@ -1,30 +1,30 @@
 ---
 tags: [architecture, performance]
 ---
-# 📊 Budget RAM et performance (Raspberry Pi 5, 4 Go)
+# 📊 Budget RAM et performance (laptop Windows serveur)
 
-| Composant | RAM estimée | Limite Docker |
+> [!info] Option B
+> Un laptop a bien plus de marge qu'un Pi 5. La contrainte principale devient **Docker Desktop (WSL2)**, qui prend par défaut jusqu'à la moitié de la RAM. Le limiter avec `.wslconfig` si le laptop n'a que 8 Go ([[Serveur Windows (option B)]]).
+
+| Composant | RAM estimée | Où |
 |---|---|---|
-| Raspberry Pi OS Lite + hostapd, dnsmasq, chrony | ~250 Mo | — |
-| Mosquitto | ~10 Mo | 64 Mo |
-| PostgreSQL | ~100–150 Mo | 256 Mo |
-| API FastAPI | ~80–120 Mo | 256 Mo |
-| **vision** (ONNX Runtime + OpenCV) | ~300–500 Mo | 768 Mo |
-| anomaly (scikit-learn) | ~120 Mo | 256 Mo |
-| Caddy | ~30 Mo | — |
-| Prometheus (rétention 2 jours) + node-exporter + cAdvisor | ~250 Mo | — |
-| Grafana | ~120 Mo | — |
-| **Total** | **≈ 1,3 – 1,6 Go** | marge d'environ 2 Go ✅ |
+| Windows + Docker Desktop (VM WSL2) | ~2–3 Go | hôte |
+| Mosquitto | ~10 Mo | Docker |
+| PostgreSQL | ~100–150 Mo | Docker |
+| API FastAPI | ~80–120 Mo | Docker |
+| anomaly (scikit-learn) | ~120 Mo | Docker |
+| Caddy | ~30 Mo | Docker |
+| Prometheus + Grafana (optionnel) | ~300 Mo | Docker |
+| **vision** (ONNX Runtime + OpenCV) | ~300–500 Mo | **Python natif** |
 
 > [!tip] À mesurer, pas à supposer
-> Faire `docker stats --no-stream` mardi soir et remplacer les estimations par les valeurs réelles : c'est une donnée prouvée pour le dossier.
+> `docker stats --no-stream` et le Gestionnaire des tâches pendant que tout tourne : ce sont des données prouvées pour le dossier.
 
 ## Vision : objectif sous 100 ms par trame
-- Capture **640×480 en MJPG** (`cv2.CAP_PROP_FOURCC`), puis redimensionnement en **320×320** pour le modèle.
-- YOLOv8n en ONNX Runtime (CPU, 4 threads) : ordre de grandeur de **quelques dizaines de ms** à 320 sur un Pi 5. **À mesurer** mardi.
+- Capture **640×480**, puis letterbox en **320×320** pour le modèle.
+- YOLOv8n en ONNX Runtime (CPU, 4 threads) : sur un CPU de laptop, on s'attend à bien moins de 100 ms. **À mesurer sur le laptop serveur** et à noter dans [[IA]].
 - Ne garder que la classe `person`, avec une confiance ≥ 0,5 et une confirmation sur **3 trames consécutives**.
-- Mesurer et publier `t_capture`, `t_infer`, `t_post` et le FPS : on les affiche dans le dashboard pendant la démo, car le jury veut voir la stack.
+- Afficher les ms d'inférence et le FPS pendant la démo : le jury veut voir la stack.
 
-## Température
-- Surveiller `vcgencmd measure_temp` (exposé par node-exporter via thermal_zone). Le Pi 5 bride ses performances vers 85 °C.
-- Ne pas descendre sous l'Active Cooler.
+## Énergie
+Laptop **sur secteur**, mise en veille désactivée : sur batterie, Windows bride le CPU et la latence de la vision augmente.

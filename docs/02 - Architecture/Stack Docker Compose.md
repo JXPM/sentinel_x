@@ -3,6 +3,12 @@ tags: [architecture, docker, infra]
 ---
 # 🐳 Stack Docker Compose (squelette)
 
+> [!important] Option B : laptop Windows + Docker Desktop
+> - Commencer par le **jalon 1** simplifié décrit dans [[Serveur Windows (option B)]], puis durcir avec ce squelette.
+> - Le service `vision` **ne tourne pas dans Docker** : Docker Desktop n'accède pas aux webcams USB. `detect.py` tourne en Python natif et appelle l'API sur `http://localhost:8000` (ou via Caddy).
+> - `node-exporter` et `cAdvisor` sont optionnels sous Docker Desktop (ils ne voient que la VM WSL2).
+> - Les ports sont liés à `192.168.137.1` : allumer le point d'accès **avant** `docker compose up`.
+
 ```yaml
 # server/docker-compose.yml
 x-hardening: &hardening
@@ -22,7 +28,7 @@ services:
     <<: *hardening
     image: eclipse-mosquitto:2
     user: "1883:1883"
-    ports: ["192.168.10.1:8883:8883"]       # lié à l'IP du point d'accès uniquement
+    ports: ["192.168.137.1:8883:8883"]       # lié à l'IP du point d'accès uniquement
     volumes:
       - ./mosquitto/config:/mosquitto/config:ro
       - ../pki/out:/mosquitto/certs:ro
@@ -51,17 +57,6 @@ services:
     networks: [backend]
     deploy: { resources: { limits: { memory: 256m } } }
 
-  vision:
-    <<: *hardening
-    build: ../ai/vision
-    user: "10002:10002"
-    group_add: ["video"]
-    devices: ["/dev/video0:/dev/video0"]
-    read_only: true
-    env_file: .env
-    networks: [backend]
-    deploy: { resources: { limits: { memory: 768m, cpus: "2.5" } } }
-
   anomaly:
     <<: *hardening
     build: ../ai/anomaly
@@ -76,7 +71,7 @@ services:
     <<: *hardening
     image: caddy:2-alpine
     cap_add: [NET_BIND_SERVICE]
-    ports: ["192.168.10.1:443:443"]
+    ports: ["192.168.137.1:443:443"]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./dashboard/dist:/srv:ro
@@ -91,16 +86,16 @@ services:
 volumes: { mosq-data: {}, pg-data: {} }
 ```
 > [!note] Squelette à ajuster
-> cAdvisor demande parfois des droits supplémentaires sur le Pi ; on documente ce compromis dans la [[Matrice de sécurité]].
+> cAdvisor demande des droits supplémentaires et ne voit que la VM WSL2 sous Docker Desktop ; on documente ce compromis dans la [[Matrice de sécurité]].
 
 ## Caddyfile
 ```
-sentinel.lan, 192.168.10.1 {
+sentinel.lan, 192.168.137.1 {
   tls /certs/server.crt /certs/server.key
   encode gzip
   handle /api/*    { reverse_proxy api:8000 }
   handle /ws       { reverse_proxy api:8000 }
-  handle /video*   { reverse_proxy vision:8081 }
+  handle /video*   { reverse_proxy host.docker.internal:8081 }   # vision en Python natif sur l'hôte
   handle /grafana* { reverse_proxy grafana:3000 }
   handle { root * /srv
            try_files {path} /index.html

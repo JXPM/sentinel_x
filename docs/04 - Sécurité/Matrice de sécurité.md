@@ -12,7 +12,7 @@ tags: [sécurité, livrable]
 | Dashboard | Accès non autorisé | Login, JWT courte durée, HTTPS uniquement, HSTS | Capture | ☐ |
 | Dashboard | XSS via message d'alerte | Échappement Vue (pas de `v-html`), en-têtes de sécurité | Test avec une alerte contenant `<script>` | ☐ |
 | Hôte (SSH) | Brute force | **Clés uniquement**, `PermitRootLogin no`, `AllowUsers`, fail2ban, `ufw limit` | `sshd -T`, extrait de config | ☐ |
-| Hôte (réseau) | Exposition de services | **UFW deny par défaut**, ports Docker liés à 192.168.10.1, chaîne `DOCKER-USER` | `nmap` de notre Pi | ☐ |
+| Hôte (réseau) | Exposition de services | **UFW deny par défaut**, ports Docker liés à 192.168.137.1, chaîne `DOCKER-USER` | `nmap` du laptop serveur | ☐ |
 | Wi-Fi | Accès au sous-réseau | WPA2-CCMP, phrase de passe ≥ 20 caractères, `ap_isolate=1`, pas de routage vers eth0 | Config hostapd | ☐ |
 | Conteneurs | Évasion, escalade | utilisateurs non-root, `cap_drop: ALL`, `no-new-privileges`, `read_only`, réseau `internal` | `docker-bench-security` | ☐ |
 | Secrets | Fuite via Git | `.env`, `secrets.h` et clés gitignorés ; `.env.example` factice | `git log -p` vérifié | ☐ |
@@ -35,7 +35,10 @@ MaxAuthTries 3
 X11Forwarding no
 ```
 
-### UFW
+> [!important] Option B (laptop Windows)
+> UFW, SSH, `DOCKER-USER` et `sshd` concernent un hôte Linux (option A). Sur le serveur Windows, l'équivalent est le **pare-feu Windows** avec des règles limitées à 192.168.137.0/24 ([[Serveur Windows (option B)]]). Compromis à écrire dans le dossier : le point d'accès Windows partage la connexion du laptop (NAT), le sous-réseau n'est donc pas étanche.
+
+### UFW (option A, pour mémoire)
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -43,15 +46,15 @@ sudo ufw default deny routed
 sudo ufw allow in on wlan0 to any port 67 proto udp      # DHCP
 sudo ufw allow in on wlan0 to any port 53                # DNS
 sudo ufw allow in on wlan0 to any port 123 proto udp     # NTP
-sudo ufw allow in on wlan0 to 192.168.10.1 port 8883 proto tcp
-sudo ufw allow in on wlan0 to 192.168.10.1 port 443 proto tcp
-sudo ufw limit in on wlan0 to 192.168.10.1 port 22 proto tcp
+sudo ufw allow in on wlan0 to 192.168.137.1 port 8883 proto tcp
+sudo ufw allow in on wlan0 to 192.168.137.1 port 443 proto tcp
+sudo ufw limit in on wlan0 to 192.168.137.1 port 22 proto tcp
 sudo ufw enable
 ```
 
 ### ⚠️ Docker contourne UFW
 Les ports publiés par Docker passent par la chaîne `FORWARD` (via DNAT) et **non par `INPUT`**, donc UFW ne les filtre pas. Deux protections :
-1. Lier chaque port à l'IP du point d'accès (`"192.168.10.1:443:443"`), comme dans [[Stack Docker Compose]].
+1. Lier chaque port à l'IP du point d'accès (`"192.168.137.1:443:443"`), comme dans [[Stack Docker Compose]].
 2. Ajouter dans `DOCKER-USER` une règle qui **refuse tout trafic arrivant par `eth0`** vers les conteneurs (script `infra/hardening/docker-user.sh`, ou l'outil `ufw-docker`).
 
 ### Docker

@@ -23,7 +23,7 @@ cat > server.ext <<EXT
 basicConstraints=CA:FALSE
 keyUsage=digitalSignature
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:sentinel.lan,IP:192.168.10.1
+subjectAltName=DNS:sentinel.lan,IP:192.168.137.1
 EXT
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -days 90 -sha256 -extfile server.ext -out server.crt
@@ -61,15 +61,15 @@ log_type notice
 
 ## Côté ESP8266
 - `ca.crt` est collé dans `firmware/include/secrets.h` (gitignoré) sous forme de `const char CA_CERT[] PROGMEM = R"EOF(...)EOF";`.
-- L'ESP doit avoir **l'heure correcte** pour valider les dates du certificat, d'où le NTP servi par le Pi.
+- L'ESP doit avoir **l'heure correcte** pour valider les dates du certificat, d'où le NTP servi par le laptop serveur (`w32time`).
 
 ## Vérifications
 ```bash
-openssl s_client -connect 192.168.10.1:8883 -CAfile pki/out/ca.crt -brief
-testssl.sh 192.168.10.1:8883
-mosquitto_pub -h 192.168.10.1 -p 8883 --cafile pki/out/ca.crt -t test -m x   # doit être refusé (pas d'identifiants)
+openssl s_client -connect 192.168.137.1:8883 -CAfile pki/out/ca.crt -brief
+testssl.sh 192.168.137.1:8883
+mosquitto_pub -h 192.168.137.1 -p 8883 --cafile pki/out/ca.crt -t test -m x   # doit être refusé (pas d'identifiants)
 ```
 
 ## Rotation et hygiène
-- Les clés ne quittent jamais le Pi ou le laptop CYBER ; `pki/out/` est gitignoré.
+- Les clés ne quittent jamais le laptop serveur ou le laptop CYBER ; `pki/out/` est gitignoré.
 - Après le workshop, on régénère la PKI avant la finale du 17 novembre.

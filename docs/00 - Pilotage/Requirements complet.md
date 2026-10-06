@@ -1,5 +1,7 @@
 # Sentinel-X : prérequis et installations (équipe G\<n\>)
 
+> [!warning] Écrit pour l'option A (Raspberry Pi). En option B, remplacer la partie Pi par [[Serveur Windows (option B)]].
+
 > Option A : le **Raspberry Pi 5 (4 Go)** fait office de PC Serveur Local, intégré au boîtier.
 > Chaque section dit **qui** installe et **où** (Pi, laptop ou ESP8266).
 > Le détail de l'architecture est dans le vault Obsidian `docs/`.

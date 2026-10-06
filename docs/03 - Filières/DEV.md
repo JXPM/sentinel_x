@@ -5,7 +5,7 @@ tags: [filière, dev]
 
 ## Firmware ESP8266 (`firmware/`)
 ### Structure de `main.cpp`
-- `setup()` : OLED → Wi-Fi (IP statique ou DHCP réservé) → NTP `configTime(0,0,"192.168.10.1")` → TLS → MQTT.
+- `setup()` : OLED → Wi-Fi (IP statique ou DHCP réservé) → NTP `configTime(0,0,"192.168.137.1")` → TLS → MQTT.
 - `loop()` **non bloquant** (`millis()`, aucun `delay()` long) :
   - toutes les 2 s : lecture DHT22 + MQ-2 → JSON (ArduinoJson) → `telemetry`
   - interruption ou polling du PIR → `event` sur changement d'état
@@ -27,7 +27,7 @@ PubSubClient mqtt(net);
 void setupTls() {
   net.setTrustAnchors(&caCert);          // vérifie le certificat du serveur via notre CA
   // net.setBufferSizes(1024, 1024);     // seulement si le serveur accepte MFLN (tester probeMaxFragmentLength)
-  mqtt.setServer("192.168.10.1", 8883);
+  mqtt.setServer("192.168.137.1", 8883);
   mqtt.setBufferSize(512);
   mqtt.setCallback(onCommand);
 }
@@ -39,6 +39,14 @@ void setupTls() {
 ### Réflexe local (mode dégradé)
 Si le broker est injoignable, l'ESP fait clignoter la LED rouge et affiche **« SERVER LOST »** sur l'OLED. C'est un **statut de connectivité**, pas de la détection : la détection d'anomalies reste le rôle du modèle IA.
 
+### Rôle des deux LEDs
+| LED | Broche | Mode auto | Commande dashboard |
+|---|---|---|---|
+| 🟢 Verte | D0 | Allumée fixe tant que l'ESP est connecté au broker MQTTS, éteinte sinon | Auto / Allumée / Éteinte |
+| 🔴 Rouge | D8 | Allumée fixe pendant une alerte, **clignotante** si le broker est perdu | Auto / Allumée / Éteinte |
+
+D'un coup d'œil : verte seule = tout va bien ; rouge fixe = alerte ; rouge qui clignote sans verte = boîtier coupé du serveur.
+
 ## API (`server/api/`)
 Voir [[API REST et WebSocket]]. Points clés :
 - `POST /api/v1/alerts` validé avec Pydantic et protégé par `X-API-Key`.
@@ -46,13 +54,26 @@ Voir [[API REST et WebSocket]]. Points clés :
 - Tests `pytest` : au minimum alertes valides et invalides, et commande publiée.
 
 ## Dashboard (`server/dashboard/`)
-| Zone | Contenu |
+Maquette de référence (charte UX + dashboard interactif) : [Sentinel-X — Charte & Dashboard](https://claude.ai/artifact/V8B5XLiRPXFKkVUgVRnQ1c). Le lien est privé tant qu'il n'est pas partagé depuis le menu **Share** de la page.
+
+Navigation par **onglets** dans la barre latérale. Toujours visibles en haut : titre de l'onglet, horloge « En direct », **bandeau d'état** (nominal / attention / critique) avec bouton d'action.
+
+| Onglet | Contenu |
 |---|---|
-| Bandeau statut | ESP online/offline, RSSI, heap, uptime ; IA active ; latence vision |
-| Courbes | Température, humidité, gaz (5 dernières minutes, glissant) + **courbe du score d'anomalie** |
-| Webcam | `<img src="/video">` (MJPEG annoté avec les boîtes) |
-| Alertes | Liste en temps réel, couleur selon la sévérité, bouton d'acquittement |
-| Commandes | Buzzer (pulse), LED rouge, LED verte, mode auto on/off |
-| Monitoring | Lien vers Grafana ou mini-jauges CPU/RAM/température |
+| Vue d'ensemble | 4 tuiles capteurs, **caméra avec HUD**, 3 dernières alertes, voyants du boîtier, Analyse IA (score, prévision, type d'incident) |
+| Capteurs | Tuiles + courbes température et gaz (10 dernières minutes) avec repères de référence |
+| Vision IA | Caméra en grand : `<img src="/video">` (MJPEG annoté), inférence, FPS, confirmation sur 3 images |
+| Alertes | Historique complet, couleur selon la sévérité, acquittement unitaire ou global ; badge du nombre d'alertes dans le menu |
+| Commandes | Buzzer (pulse 2 s), LED verte et LED rouge (Auto / Allumée / Éteinte), réponse automatique on/off |
+| Système | ESP, Mosquitto, API, PostgreSQL, services vision et anomalies ; lien Grafana |
+
+### HUD de la caméra
+Surcouche dessinée **côté dashboard** par-dessus le flux MJPEG (CSS/SVG, pas dans l'image) :
+- coins de visée, réticule central, graduations latérales, ligne de balayage animée ;
+- `REC · CAM-01`, horloge, numéro d'image, modèle et latence (`YOLOv8n · ONNX 320 · 36 ms`) ;
+- cible : boîte à coins rouges, étiquette `PERSONNE 0,87 · TRK-01`, fiche « CIBLE VERROUILLÉE » (position, taille, état du PIR) ;
+- bandeau « PRÉSENCE DÉTECTÉE » puis « INTRUSION CONFIRMÉE · PIR + CAMÉRA » ; sans cible : « BALAYAGE · AUCUNE CIBLE ».
+
+Les coordonnées de la boîte viennent du service vision (champ `bbox` de l'événement) ; l'animation de balayage est désactivée si l'utilisateur a demandé la réduction des animations.
 
 Règles : pas de CDN, pas de `v-html`, token stocké en mémoire (pas de `localStorage`), reconnexion WebSocket automatique.

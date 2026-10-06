@@ -1,31 +1,36 @@
 ---
 tags: [filière, infra]
 ---
-# 🖧 INFRA : Pi, réseau, Docker, monitoring
+# 🖧 INFRA : laptop serveur Windows, réseau, Docker, monitoring
 
-## Checklist d'installation du Pi
-- [ ] Flash Raspberry Pi OS Lite 64-bit avec Pi Imager : hostname `sentinel`, utilisateur personnalisé, **clé SSH publique**, pas de mot de passe SSH
-- [ ] `apt full-upgrade`, paquets de `REQUIREMENTS.md`
-- [ ] Docker + compose ; `docker run hello-world`
-- [ ] Point d'accès : hostapd + dnsmasq + IP statique ([[Réseau et adressage IP]])
-- [ ] `sysctl net.ipv4.ip_forward=0` (persistant dans `/etc/sysctl.d/`)
-- [ ] chrony en serveur NTP pour 192.168.10.0/24
-- [ ] `docker compose up -d` ; `docker compose ps` affiche tous les services healthy
-- [ ] Démarrage automatique au boot : services en `restart: unless-stopped`, Docker activé via systemd
-- [ ] **Clone de la SD** le mercredi soir (`dd` ou Pi Imager → image `.img.xz`)
+> [!important] Option B
+> Pas de Raspberry Pi : le serveur est un laptop Windows ([[ADR-005 Option B laptop serveur]]). Le guide complet, commandes comprises, est dans **[[Serveur Windows (option B)]]**.
+
+## Checklist d'installation du laptop serveur
+- [ ] Virtualisation activée, `wsl --install`, Docker Desktop (WSL2), `docker run hello-world`
+- [ ] Git, Python 3.11, clone du dépôt
+- [ ] Point d'accès mobile `SENTINEL-X-G<n>` en **2,4 GHz**, économie d'énergie désactivée, IP 192.168.137.1 vérifiée avec `ipconfig`
+- [ ] Règles du pare-feu Windows (8883, 443, 123 ; 1883 et 8000 pour le jalon 1 seulement)
+- [ ] Service de temps Windows en serveur NTP
+- [ ] **Jalon 1** : `server/docker-compose.yml` avec mosquitto (1883), db, api (8000) ; tests `curl` et `mosquitto_pub` depuis un autre laptop
+- [ ] **Jalon 2** : Mosquitto TLS 8883 + comptes + ACL, Caddy 443, fermeture de 1883 et 8000
+- [ ] Docker Desktop lancé à l'ouverture de session, services en `restart: unless-stopped`
+- [ ] Jour J : veille désactivée, Windows Update suspendu, laptop sur secteur
+- [ ] Sauvegarde : `.env` et `pki/out/` copiés sur une clé USB (**hors du dépôt**), vidéo de secours de la démo
 
 ## Monitoring et MCO
-- Prometheus récupère les métriques de node-exporter (CPU, RAM, disque, **température**), cAdvisor (par conteneur) et `api:8000/metrics`.
-- Tableaux Grafana à préparer : *Hôte Pi*, *Conteneurs*, *Débit MQTT* (messages/s, depuis les métriques de l'API).
+- Prometheus récupère `api:8000/metrics` ; Grafana affiche le débit MQTT et les alertes.
+- node-exporter et cAdvisor sont pensés pour un hôte Linux : sous Docker Desktop, ils ne voient que la VM WSL2. Les garder optionnels, ou les remplacer par des captures du Gestionnaire des tâches et `docker stats`.
 - Logs : rotation `json-file` (10 Mo × 3) ; `docker compose logs -f mosquitto` pour la démo.
-- Dans le dossier : captures Grafana avec la stack en charge et la vision active.
+- Dans le dossier : captures Grafana ou `docker stats` avec la stack en charge et la vision active.
 
-## Commandes utiles
-```bash
+## Commandes utiles (PowerShell, dans `server\`)
+```powershell
 docker compose ps
 docker stats --no-stream
 docker compose logs -f --tail=50 api
-mosquitto_sub -h 192.168.10.1 -p 8883 --cafile pki/out/ca.crt -u api -P '***' -t 'sentinel/#' -v
-iw dev wlan0 station dump        # clients Wi-Fi connectés
-vcgencmd measure_temp
+docker compose exec mosquitto mosquitto_sub -t "sentinel/#" -v
+ipconfig                                   # IP du point d'accès : 192.168.137.1
+Get-NetFirewallRule -DisplayName "Sentinel*" | Select DisplayName, Enabled
+w32tm /query /status
 ```
