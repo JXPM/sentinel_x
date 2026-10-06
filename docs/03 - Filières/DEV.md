@@ -47,13 +47,15 @@ Si le broker est injoignable, l'ESP fait clignoter la LED rouge et affiche **« 
 
 D'un coup d'œil : verte seule = tout va bien ; rouge fixe = alerte ; rouge qui clignote sans verte = boîtier coupé du serveur.
 
-## API (`server/api/`)
+## API (`app/` aujourd'hui, `server/api/` à terme)
 Voir [[API REST et WebSocket]]. Points clés :
 - `POST /api/v1/alerts` validé avec Pydantic et protégé par `X-API-Key`.
 - Bridge MQTT → base de données → diffusion WebSocket.
 - Tests `pytest` : au minimum alertes valides et invalides, et commande publiée.
 
-## Dashboard (`server/dashboard/`)
+## Dashboard (`dashboard/`)
+React 19 + Vite + TypeScript ([[ADR-006 Dashboard React et TypeScript]]). Lancer : `cd dashboard && npm install && npm run dev` → http://localhost:5173. Mode d'emploi complet : `dashboard/README.md`.
+
 Maquette de référence (charte UX + dashboard interactif) : [Sentinel-X — Charte & Dashboard](https://claude.ai/artifact/V8B5XLiRPXFKkVUgVRnQ1c). Le lien est privé tant qu'il n'est pas partagé depuis le menu **Share** de la page.
 
 Navigation par **onglets** dans la barre latérale. Toujours visibles en haut : titre de l'onglet, horloge « En direct », **bandeau d'état** (normal / attention / critique) avec bouton d'action.
@@ -83,4 +85,6 @@ Les boîtes viennent de `GET /video/status` (servi par `detect.py`, lu 4 fois pa
 - `VITE_DATA_SOURCE=mock` : simulation hors matériel avec sélecteur de scénario.
 - En dev, Vite relaie `/api` et `/ws` vers `:8000`, `/video` vers `:8081` (`SENTINEL_API`, `SENTINEL_VISION`). Les erreurs `ECONNREFUSED 127.0.0.1:8000` dans le terminal Vite veulent seulement dire que l'API n'est pas lancée.
 
-Règles : pas de CDN, pas de `v-html`, token stocké en mémoire (pas de `localStorage`), reconnexion WebSocket automatique.
+Règles : pas de CDN (polices `@fontsource`, icônes en SVG), pas de `dangerouslySetInnerHTML` (React échappe les textes), token stocké en mémoire (pas de `localStorage`), reconnexion WebSocket automatique.
+
+Évolutions prévues (onglets Règles et Personnel, texte sur l'OLED) : [[Idées et évolutions]].

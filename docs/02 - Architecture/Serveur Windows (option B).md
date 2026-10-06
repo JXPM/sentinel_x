@@ -148,9 +148,12 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt -r requirements-export.txt
 python export_model.py
 $env:SENTINEL_API_URL = "http://localhost:8000"
-python detect.py --source 1
+python detect.py --source 1 --host 0.0.0.0
 ```
-Si la webcam met longtemps à s'ouvrir ou n'est pas trouvée, essayer `--source 0`, `1`, `2` (l'ordre des index diffère de Linux).
+- Sous Windows, la caméra se choisit **par numéro** (la recherche par nom `--source c270` ne marche que sous Linux). Si la webcam met longtemps à s'ouvrir ou n'est pas trouvée, essayer `--source 0`, `1`, `2`.
+- `--host 0.0.0.0` : nécessaire ici, car Caddy tourne dans Docker Desktop et joint le flux via `host.docker.internal:8081`. En contrepartie, **bloquer le port 8081 depuis le Wi-Fi** dans le pare-feu Windows (seul Caddy doit l'atteindre). À vérifier avec `nmap` ([[Matrice de sécurité]]).
+- Options de détection (présence prolongée, objets, etc.) : voir [[IA]].
+- L'heure du laptop doit être juste (synchronisation NTP active) : la future règle « heure inhabituelle » en dépend ([[Idées et évolutions]]).
 
 ## 8. Le jour de la démo
 ```powershell

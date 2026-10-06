@@ -31,7 +31,7 @@ Base : `https://sentinel.lan/api/v1` (derrière Caddy). Documentation OpenAPI : 
   "data": {"bbox":[120,80,260,400], "latency_ms": 42}
 }
 ```
-Réponse : `201 {"id": 42, "ts": "..."}`. Validation stricte avec Pydantic (énumérations, longueurs maximales). Le champ `message` est **échappé côté dashboard** (pas de `v-html`).
+Réponse : `201 {"id": 42, "ts": "..."}`. Validation stricte avec Pydantic (énumérations, longueurs maximales). Le champ `message` est **échappé côté dashboard** (React, pas de `dangerouslySetInnerHTML`).
 
 ## Messages WebSocket
 ```json

@@ -114,27 +114,23 @@ pytest>=8
 httpx>=0.27
 ```
 
-## 6. Dashboard : `server/dashboard` (DEV)
+## 6. Dashboard : `dashboard/` (DEV)
 
 ```bash
-npm create vite@latest dashboard -- --template vue
-npm i chart.js vue-chartjs chartjs-adapter-date-fns date-fns
-npm i -D eslint prettier
+cd dashboard
+npm install        # React 19, Vite, TypeScript, polices @fontsource : tout est dans package.json
+npm run dev        # http://localhost:5173
+npm run build      # dist/ servi par Caddy
 ```
+Node.js 20 ou plus. Aucune bibliothèque de graphiques ([[ADR-006 Dashboard React et TypeScript]]).
 
 > ⚠️ Tout est bundlé localement, **aucun CDN** : il n'y a pas d'Internet sur le réseau de démo.
 
-## 7. IA vision : `ai/vision/requirements.txt` (IA, sur le Pi)
+## 7. IA vision : `ai/vision/requirements.txt` (IA, sur le laptop serveur, hors Docker)
 
-```
-onnxruntime>=1.18
-opencv-python-headless>=4.9
-numpy>=1.26
-requests>=2.32
-flask>=3.0
-```
+Voir le fichier du dépôt (`onnxruntime`, `opencv-python`, `numpy`, `requests`). Plus de Flask : le flux MJPEG est servi par la bibliothèque standard dans `detect.py`.
 
-Sur un **laptop uniquement**, pour exporter le modèle (inutile d'installer PyTorch sur le Pi) :
+Pour exporter le modèle (une fois, `requirements-export.txt`) :
 
 ```bash
 pip install ultralytics

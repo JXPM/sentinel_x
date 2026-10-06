@@ -10,11 +10,12 @@ tags: [sécurité, livrable]
 | Broker MQTT | Saturation | `max_connections 20`, `message_size_limit 4096`, limite mémoire du conteneur | Config + `docker stats` | ☐ |
 | API | Injection d'alertes | `X-API-Key` sur `POST /alerts`, validation Pydantic | `curl` sans clé → 401 | ☐ |
 | Dashboard | Accès non autorisé | Login, JWT courte durée, HTTPS uniquement, HSTS | Capture | ☐ |
-| Dashboard | XSS via message d'alerte | Échappement Vue (pas de `v-html`), en-têtes de sécurité | Test avec une alerte contenant `<script>` | ☐ |
+| Dashboard | XSS via message d'alerte | Échappement React (pas de `dangerouslySetInnerHTML`), en-têtes de sécurité | Test avec une alerte contenant `<script>` | ☐ |
 | Hôte (SSH) | Brute force | **Clés uniquement**, `PermitRootLogin no`, `AllowUsers`, fail2ban, `ufw limit` | `sshd -T`, extrait de config | ☐ |
 | Hôte (réseau) | Exposition de services | **UFW deny par défaut**, ports Docker liés à 192.168.137.1, chaîne `DOCKER-USER` | `nmap` du laptop serveur | ☐ |
 | Wi-Fi | Accès au sous-réseau | WPA2-CCMP, phrase de passe ≥ 20 caractères, `ap_isolate=1`, pas de routage vers eth0 | Config hostapd | ☐ |
 | Conteneurs | Évasion, escalade | utilisateurs non-root, `cap_drop: ALL`, `no-new-privileges`, `read_only`, réseau `internal` | `docker-bench-security` | ☐ |
+| Flux caméra | Accès au flux vidéo depuis le réseau | `detect.py` écoute sur 127.0.0.1 par défaut ; exposé uniquement via Caddy (HTTPS + login) | `nmap` : 8081 fermé depuis le Wi-Fi | ☐ |
 | Secrets | Fuite via Git | `.env`, `secrets.h` et clés gitignorés ; `.env.example` factice | `git log -p` vérifié | ☐ |
 | Disponibilité | Panne ou plantage | `restart: unless-stopped`, healthchecks, SD clonée | — | ☐ |
 
