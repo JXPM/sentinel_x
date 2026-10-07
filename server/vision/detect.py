@@ -14,7 +14,7 @@ Utilisation :
   python detect.py --source 1      caméra n°1
 """
 import argparse
-import datetime as dt
+import datetime
 import json
 import sys
 import threading
@@ -213,7 +213,7 @@ def iou_touch(a, b, margin=0.15):
     return a[0] < x2 and a[2] > x1 and a[1] < y2 and a[3] > y1
 
 
-def is_off_hours(now: dt.datetime, start: dt.time, end: dt.time, work_days: set[int]) -> bool:
+def is_off_hours(now: datetime.datetime, start: datetime.time, end: datetime.time, work_days: set[int]) -> bool:
     """Hors horaires : jour non ouvré, ou heure < start, ou heure >= end."""
     return now.weekday() not in work_days or not (start <= now.time() < end)
 
@@ -290,7 +290,7 @@ class Detector(threading.Thread):
                         others.append({"label": label, "confidence": round(float(p), 2), "bbox": b})
 
             now = time.time()
-            off_hours = is_off_hours(dt.datetime.now(tz), a.work_start, a.work_end, work_days)
+            off_hours = is_off_hours(datetime.datetime.now(tz), a.work_start, a.work_end, work_days)
             h, w = frame.shape[:2]
             person = bool(persons)
             best = max(persons, default=(0.0, None))
@@ -434,9 +434,9 @@ def main():
     p.add_argument("--confirm", type=int, default=3, help="images consécutives pour confirmer")
     p.add_argument("--loiter", type=float, default=30, help="présence prolongée au-delà de N s")
     p.add_argument("--abandon", type=float, default=20, help="sac seul au-delà de N s")
-    p.add_argument("--work-start", type=dt.time.fromisoformat, default="08:30",
+    p.add_argument("--work-start", type=datetime.time.fromisoformat, default="08:30",
                    help="début des heures ouvrées (HH:MM)")
-    p.add_argument("--work-end", type=dt.time.fromisoformat, default="17:00",
+    p.add_argument("--work-end", type=datetime.time.fromisoformat, default="17:00",
                    help="fin des heures ouvrées (HH:MM) ; en dehors, toute alerte est critique")
     p.add_argument("--work-days", default="0,1,2,3,4", help="jours ouvrés, 0 = lundi … 6 = dimanche")
     p.add_argument("--tz", default="Europe/Paris", help="fuseau des heures ouvrées")
