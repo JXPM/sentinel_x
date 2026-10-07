@@ -21,11 +21,16 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-bar_saas_venv/
 node_modules/
 server/dashboard/dist/
 .pio/
 .vscode/
 .ipynb_checkpoints/
 
+ai/**/*.pt
 
+# Obsidian : on partage les notes et la config, pas l'état local de chacun
+docs/.obsidian/workspace*.json
+docs/.obsidian/cache
+docs/.trash/
+bar_saas_venv/
