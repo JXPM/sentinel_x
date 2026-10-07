@@ -10,7 +10,7 @@ date: 2026-10-06
 ## Vue d'ensemble
 | # | Idée | Faisable ? | Effort | Dépend de | Quand |
 |---|---|---|---|---|---|
-| 1 | Présence à une heure inhabituelle = suspecte | ✅ oui, simple | ~2 h | rien (vision seule) | **avant le gel** |
+| 1 | Présence à une heure inhabituelle = suspecte | ✅ **fait** (PR #5) | ~2 h | rien (vision seule) | **avant le gel** |
 | 2 | Afficher un texte sur l'écran du boîtier depuis le dashboard | ✅ oui | ~3 h à trois | `POST /api/v1/commands` + bridge MQTT, firmware | **avant le gel** si la chaîne commandes marche |
 | 3 | Buzzer automatique selon des règles | ✅ oui | ~½ journée | commandes MQTT (idée 2), moteur de règles dans l'API | version minimale avant le gel, complète pour la finale |
 | 4 | Onglet « Règles » : modifier les seuils (ex. présence 30 s → 1 min) | ✅ oui | ~½ journée | API (stockage des réglages), `detect.py` relit sa config | version minimale avant le gel, complète pour la finale |
@@ -20,13 +20,21 @@ date: 2026-10-06
 ## 1. Heure inhabituelle
 **Idée** : une présence en dehors des heures de travail est plus suspecte qu'en journée.
 
-**Comment** : des plages « heures ouvrées » réglables (par défaut lundi-vendredi, 7 h-20 h). En dehors :
-- une présence confirmée passe directement en **critique** (« Présence hors horaires ») au lieu d'« attention » ;
-- la présence prolongée et l'objet abandonné montent d'un niveau.
+> [!success] Fait le 2026-10-07 (PR #5), testé de bout en bout vision → API → dashboard
 
-Calcul dans `detect.py` (heure locale du laptop serveur) ; les plages viennent des réglages de l'idée 4. Nouveau `reason: off_hours` dans `data` de l'alerte, aucun changement de schéma.
+**Heures ouvrées** (décision d'équipe) : **8 h 30-17 h, du lundi au vendredi**. Avant 8 h 30, à partir de 17 h et tout le week-end = hors horaires.
 
-**Démo** : régler la plage pour que l'heure de la soutenance soit « hors horaires », passer devant la caméra → bandeau critique.
+**Ce que fait `detect.py`** : hors horaires, **toute** alerte vision (présence, présence prolongée, objet abandonné) part en **`critical`**, avec un message préfixé « Hors horaires : » et `data.off_hours: true`. Le champ `reason` reste inchangé (une présence prolongée hors horaires reste `loitering`) : aucun changement de schéma ni de contrat. `/video/status` expose aussi `off_hours` pour un futur badge dans le dashboard.
+
+**Options** : `--work-start 08:30`, `--work-end 17:00`, `--work-days 0,1,2,3,4` (0 = lundi). Plus tard, ces plages viendront des réglages de l'idée 4.
+
+**Démo** : forcer une plage déjà passée, passer devant la caméra → bandeau critique.
+```bash
+.venv/bin/python detect.py --source c270 --no-show --host 0.0.0.0 --work-start 00:00 --work-end 00:01
+```
+
+> [!warning] À vérifier sur le serveur
+> Le 2026-10-07 à 14 h 30, la vision qui tournait sur le serveur n'était **pas** celle de `main` (pas de `off_hours`). La relancer depuis `main` avant la démo ([[Serveur Windows (option B)]], section 0).
 
 **Point d'attention** : l'heure du laptop doit être juste (NTP), sinon tout est faux. Le mentionner dans [[Serveur Windows (option B)]].
 
@@ -116,6 +124,6 @@ Le dashboard a déjà un interrupteur « réponse automatique » (onglet Command
 
 ## Questions à trancher en équipe
 - [ ] Qui prend l'idée 2 côté firmware ?
-- [ ] Heures ouvrées par défaut pour la démo ?
+- [x] Heures ouvrées par défaut pour la démo ? → **8 h 30-17 h, lundi-vendredi**
 - [ ] Rôles : faut-il un compte « administrateur » distinct de « opérateur » pour les règles et le personnel ?
 - [ ] Idée 5 : l'équipe veut-elle la porter jusqu'à la finale ?

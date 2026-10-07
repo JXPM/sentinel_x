@@ -5,7 +5,7 @@ date: 2026-10-05
 ---
 # ADR-005 : Option B, un laptop sert de serveur local
 
-> Remplace [[ADR-001 Option A Raspberry Pi 5]].
+> Remplace [[ADR-001 Option A Raspberry Pi 5]]. Précisée par [[ADR-007 Serveur WSL2 et Docker Engine]] (WSL2 + Docker Engine au lieu de Docker Desktop, vision dans WSL).
 
 ## Contexte
 L'équipe n'a pas de Raspberry Pi 5. Le sujet autorise l'option B : le laptop d'un membre sert de serveur local et de point d'accès.

@@ -4,7 +4,73 @@ tags: [architecture, infra, windows]
 # 🪟 Serveur Windows (option B)
 
 > [!summary] En une phrase
-> Un laptop **Windows 10/11** de l'équipe sert de serveur : il diffuse le Wi-Fi de démo (point d'accès mobile, **192.168.137.1**), fait tourner **Docker Desktop** (mosquitto, postgres, api…) et exécute la **vision en Python natif**, car Docker Desktop n'accède pas aux webcams USB. Voir [[ADR-005 Option B laptop serveur]].
+> Le **PC Windows de Mathis** sert de serveur : il diffuse le Wi-Fi de démo (point d'accès mobile, **192.168.137.1**) et héberge **Ubuntu sous WSL2**, où tournent Docker Engine (mosquitto, api, dashboard) **et** la vision. Voir [[ADR-005 Option B laptop serveur]] et [[ADR-007 Serveur WSL2 et Docker Engine]].
+
+## 0. Ce qui tourne réellement (mis en place le 2026-10-07)
+> [!important] Les sections 1 à 8 décrivent le plan initial (Docker Desktop, vision sous Windows). La mise en place réelle est celle-ci ; elles restent valables pour le point d'accès, le NTP et le jour de la démo.
+
+```
+ Ton laptop 192.168.137.20 ──Wi-Fi──► PC Windows de Mathis 192.168.137.1
+                                        │  netsh portproxy → 127.0.0.1 (+ pare-feu 192.168.137.0/24)
+                                        │    2222 SSH · 8000 API · 1883 MQTT · 8080 dashboard
+                                        ▼
+                                      Ubuntu 26.04 sous WSL2 (172.31.x.x, invisible du Wi-Fi)
+                                        ├─ Docker Engine : mosquitto :1883, api :8000, dashboard (Caddy) :8080
+                                        └─ tmux « vision » : detect.py :8081 (C270 via usbipd)
+```
+
+| Adresse (depuis le Wi-Fi) | Service |
+|---|---|
+| `http://192.168.137.1:8080` | **dashboard** (Caddy : `/` → build React, `/api` et `/ws` → api, `/video` → detect.py) |
+| `http://192.168.137.1:8000` | API FastAPI en direct (jalon 1, à fermer au jalon 2) |
+| `192.168.137.1:1883` | Mosquitto, anonyme et en clair (jalon 1, à remplacer par 8883 TLS) |
+| `ssh -p 2222 equipe@192.168.137.1` | administration de WSL (compte `equipe`, groupes `sudo`, `docker`, `video`) |
+
+### Relais Windows (PowerShell administrateur, une fois)
+```powershell
+netsh interface portproxy add v4tov4 listenaddress=192.168.137.1 listenport=8000 connectaddress=127.0.0.1 connectport=8000
+netsh interface portproxy add v4tov4 listenaddress=192.168.137.1 listenport=1883 connectaddress=127.0.0.1 connectport=1883
+netsh interface portproxy add v4tov4 listenaddress=192.168.137.1 listenport=8080 connectaddress=127.0.0.1 connectport=8080
+New-NetFirewallRule -DisplayName "Sentinel TEST API 8000"       -Direction Inbound -Protocol TCP -LocalPort 8000 -RemoteAddress 192.168.137.0/24 -Action Allow
+New-NetFirewallRule -DisplayName "Sentinel TEST MQTT 1883"      -Direction Inbound -Protocol TCP -LocalPort 1883 -RemoteAddress 192.168.137.0/24 -Action Allow
+New-NetFirewallRule -DisplayName "Sentinel TEST Dashboard 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -RemoteAddress 192.168.137.0/24 -Action Allow
+netsh interface portproxy show all      # vérification
+```
+Le port 8081 (flux vidéo) **n'est pas relayé** : seul Caddy, dans WSL, le joint.
+
+### Après chaque redémarrage du PC
+1. Point d'accès mobile allumé (2,4 GHz).
+2. Webcam vers WSL (PowerShell administrateur) — **6-3 = Logi C270**, pas 4-1 (webcam intégrée) :
+   ```powershell
+   & "C:\Program Files\usbipd-win\usbipd.exe" attach --wsl --busid 6-3
+   ```
+3. Dans WSL (`ssh -p 2222 equipe@192.168.137.1`) :
+   ```bash
+   cd ~/sentinel_x && git pull
+   cd server && docker compose up -d --build && docker compose ps
+   tmux new -d -s vision "cd ~/sentinel_x/ai/vision && SENTINEL_API_URL=http://localhost:8000 .venv/bin/python detect.py --source c270 --no-show --host 0.0.0.0 2>&1 | tee vision.log"
+   ```
+4. Vérifier depuis un autre appareil : `http://192.168.137.1:8080` (caméra en direct, alertes).
+
+### Vision dans WSL (installation, une fois)
+```bash
+sudo usermod -aG docker,video equipe                 # puis se reconnecter
+sudo apt install -y libgl1 libglib2.0-0t64 tmux usbutils
+curl -LsSf https://astral.sh/uv/install.sh | sh && source ~/.local/bin/env
+cd ~/sentinel_x/ai/vision
+uv venv -p 3.12 .venv                                # Python 3.12 : celui d'Ubuntu 26.04 est trop récent pour numpy < 2.3
+uv pip install -p .venv -r requirements.txt "opencv-python<5"
+# modèle (gitignoré), depuis un laptop qui l'a :
+#   scp -P 2222 ai/vision/models/yolov8n-320.onnx equipe@192.168.137.1:~/sentinel_x/ai/vision/models/
+.venv/bin/python detect.py --list-cameras            # /dev/video0  Logi C270 HD WebCam
+```
+
+### Pièges rencontrés
+- `permission denied … docker.sock` : `equipe` pas dans le groupe `docker`, ou session ouverte avant le `usermod` → se reconnecter.
+- `curl` qui tourne sans fin depuis le Wi-Fi : port non relayé par `portproxy` ou bloqué par le pare-feu Windows.
+- Caméra « online » mais aucune image (`/video/status` sans `fps`) : **OpenCV 5.0** → revenir à `opencv-python<5`.
+- Copier-coller dans le SSH : les blocs `<<'EOF'` cassent si des espaces précèdent `EOF` ; passer par Git (fichiers écrits sur un laptop, `git pull` sur le serveur).
+- `git push` depuis le serveur : pas de mot de passe GitHub (token obligatoire). Pousser depuis un laptop (`git fetch ssh://equipe@192.168.137.1:2222/home/equipe/sentinel_x <branche>:<branche>`), ne pas stocker de token sur le compte partagé.
 
 ```
  ESP8266 ──Wi-Fi 2,4 GHz──► [Laptop Windows = serveur]  192.168.137.1

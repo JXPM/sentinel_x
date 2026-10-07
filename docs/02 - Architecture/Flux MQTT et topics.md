@@ -3,6 +3,23 @@ tags: [architecture, mqtt, contrat]
 ---
 # 📡 Flux MQTT et topics (contrat entre DEV, IA et INFRA)
 
+> [!warning] Écart constaté sur le serveur le 2026-10-07 : à trancher avant d'écrire le firmware
+> L'API qui tourne sur le serveur (pas encore dans `main`) s'abonne à `sentinel/#` et a reçu des messages d'un appareil **`edge01`** sur **`sentinel/groupe1/edge01`**, dans un format différent du contrat ci-dessous (lu via `GET /api/v1/bridge`) :
+> ```json
+> {"device":"edge01","fw":"2.7.0","seq":1292,"device_ts":1791375913,
+>  "temperature":26.9,"humidity":52.7,"gas_raw":21,"gas_ready":true,
+>  "motion":true,"armed":true,"silenced":false,
+>  "alerts":{"gas":false,"temperature":false,"motion":true,"sensor_fault":false,"remote":false},
+>  "rssi":-44,"uptime":2483,"heap":45016}
+> ```
+> | Contrat (ci-dessous) | Constaté |
+> |---|---|
+> | `sentinel/sx-001/telemetry`, `/event`, `/status`, `/cmd` | `sentinel/groupe1/edge01` |
+> | `dev`, `t`, `h`, `gas`, `pir`, `up` | `device`, `temperature`, `humidity`, `gas_raw`, `motion`, `uptime` |
+> | — | `fw`, `seq`, `gas_ready`, `armed`, `silenced`, `alerts{…}` |
+>
+> **Décision à prendre** : soit le firmware suit ce format (c'est celui que l'API du serveur comprend déjà), soit l'API revient au contrat. Dans les deux cas, mettre à jour cette note et les ACL. Origine de `edge01` (vrai ESP ou simulateur) : à identifier ([[2026-10-07 Mercredi]]).
+
 ## Topics
 | Topic | Sens | QoS | Retain | Fréquence |
 |---|---|---|---|---|

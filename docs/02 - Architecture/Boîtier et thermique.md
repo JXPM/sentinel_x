@@ -6,6 +6,9 @@ tags: [architecture, fablab, hardware]
 > [!important] Option B : pas de Raspberry Pi dans le boîtier
 > Le serveur est un laptop Windows posé **à côté** ([[ADR-005 Option B laptop serveur]], [[Serveur Windows (option B)]]). Le boîtier ne contient que la partie capteurs et actionneurs. On n'a plus besoin de compartiment ni de ventilation pour un Pi.
 
+> [!info] Version actuelle : boîtier v4 (2026-10-07)
+> `boitier v4.f3d` (Fusion 360) et `boitier v4.stl` (17 836 triangles), encombrement **191 × 92 × 50 mm**. À ranger dans `cad/` du dépôt ([[Arborescence du dépôt]]) pour le rendu.
+
 ## Contraintes du sujet
 Conception sous **Fusion360 uniquement**, **OLED visible**, passe-câbles propres, **aucun fil apparent**. Gravure laser du logo AetherCorp, des consignes de sécurité et d'un numéro de série (ex. `SX-2050-G<n>-001`).
 

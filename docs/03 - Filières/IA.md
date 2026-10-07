@@ -35,7 +35,7 @@ python detect.py --list-cameras             # Linux : noms des caméras
 python detect.py --source c270              # Linux : caméra choisie par son nom
 python detect.py --source 1                 # Windows : par numéro (pas de recherche par nom)
 ```
-Options utiles : `--no-show` (sans fenêtre), `--debug-objects` (meilleur score couteau/ciseaux/batte chaque seconde), `--obj-conf`, `--info-conf`, `--loiter`, `--abandon`, `--no-crop-pass`, `--port` (8081 par défaut, 0 = pas de flux), `--host` (127.0.0.1 par défaut ; 0.0.0.0 seulement si Caddy dans Docker doit joindre le flux). `SENTINEL_CAMERA` remplace `--source`, `SENTINEL_API_URL` et `SENTINEL_API_KEY` activent l'envoi des alertes.
+Options utiles : `--work-start`, `--work-end`, `--work-days` (heures ouvrées, 8 h 30-17 h lun-ven par défaut ; en dehors, toute alerte passe en `critical` avec `data.off_hours`, voir [[Idées et évolutions]]), `--no-show` (sans fenêtre), `--debug-objects` (meilleur score couteau/ciseaux/batte chaque seconde), `--obj-conf`, `--info-conf`, `--loiter`, `--abandon`, `--no-crop-pass`, `--port` (8081 par défaut, 0 = pas de flux), `--host` (127.0.0.1 par défaut ; 0.0.0.0 seulement si Caddy dans Docker doit joindre le flux). `SENTINEL_CAMERA` remplace `--source`, `SENTINEL_API_URL` et `SENTINEL_API_KEY` activent l'envoi des alertes.
 
 > [!warning] Numéro de caméra
 > Sous Linux, `/dev/videoN` change selon l'ordre de branchement : le 2026-10-06, la C270 était `/dev/video4` et `--source 1` ne s'ouvrait pas. D'où la recherche par nom. Sous Windows, vérifier le numéro le jour de la démo.

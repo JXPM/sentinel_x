@@ -21,7 +21,7 @@ tags: [moc]
 
 **Sécurité** : [[Matrice de sécurité]] · [[PKI et certificats TLS]] · [[Pentest du jeudi]]
 
-**Décisions** : [[ADR-001 Option A Raspberry Pi 5]] · [[ADR-002 MQTTS seul transport ESP]] · [[ADR-003 FastAPI et PostgreSQL]] · [[ADR-004 Vision en ONNX Runtime]] · [[ADR-005 Option B laptop serveur]] · [[ADR-006 Dashboard React et TypeScript]]
+**Décisions** : [[ADR-001 Option A Raspberry Pi 5]] · [[ADR-002 MQTTS seul transport ESP]] · [[ADR-003 FastAPI et PostgreSQL]] · [[ADR-004 Vision en ONNX Runtime]] · [[ADR-005 Option B laptop serveur]] · [[ADR-006 Dashboard React et TypeScript]] · [[ADR-007 Serveur WSL2 et Docker Engine]]
 
 **Soutenance** : [[Script démo live]] · [[Pitch et timing]] · [[Questions jury probables]] · [[Storyboard Sentinel Drop]]
 
@@ -30,11 +30,11 @@ tags: [moc]
 ## 📌 Décisions figées
 | Sujet | Choix |
 |---|---|
-| Serveur | **Laptop Windows** + Docker Desktop, à côté du boîtier (option B) |
+| Serveur | **PC Windows de Mathis** : Ubuntu sous **WSL2 + Docker Engine**, vision comprise (webcam via usbipd) ; dashboard sur `http://192.168.137.1:8080` ([[ADR-007 Serveur WSL2 et Docker Engine]]) |
 | Transport ESP | MQTTS (TLS 1.2, port 8883, certificats ECDSA P-256) |
 | Backend | FastAPI (Python) + PostgreSQL 16 |
 | Front | **React 19 + Vite + TypeScript**, graphiques en SVG maison (build statique, aucun CDN) ([[ADR-006 Dashboard React et TypeScript]]) |
-| Vision | YOLOv8n exporté en ONNX, entrée 320×320, ONNX Runtime, **Python natif hors Docker** ; flux `/video` et état `/video/status` sur :8081 pour le dashboard |
+| Vision | YOLOv8n exporté en ONNX, entrée 320×320, ONNX Runtime, **Python natif hors Docker** (dans WSL, OpenCV 4) ; flux `/video` et état `/video/status` sur :8081 pour le dashboard ; hors 8 h 30-17 h lun-ven, alertes critiques |
 | Anomalies | Isolation Forest (non supervisé) et Random Forest (type d'incident) |
 | Réseau | Point d'accès mobile Windows en 2,4 GHz, 192.168.137.0/24 (plan B : routeur dédié) |
 | Proxy | Caddy en HTTPS, certificat signé par la CA locale |

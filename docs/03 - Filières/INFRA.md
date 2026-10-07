@@ -6,13 +6,17 @@ tags: [filière, infra]
 > [!important] Option B
 > Pas de Raspberry Pi : le serveur est un laptop Windows ([[ADR-005 Option B laptop serveur]]). Le guide complet, commandes comprises, est dans **[[Serveur Windows (option B)]]**.
 
+> [!info] Mise en place réelle (2026-10-07)
+> PC de Mathis : **Ubuntu 26.04 sous WSL2 + Docker Engine** (pas Docker Desktop), relais `netsh portproxy` vers `127.0.0.1`, webcam via **usbipd**. Mode opératoire et redémarrage : [[Serveur Windows (option B)]] section 0 ; décision : [[ADR-007 Serveur WSL2 et Docker Engine]].
+
 ## Checklist d'installation du laptop serveur
-- [ ] Virtualisation activée, `wsl --install`, Docker Desktop (WSL2), `docker run hello-world`
-- [ ] Git, Python 3.11, clone du dépôt
-- [ ] Point d'accès mobile `SENTINEL-X-G<n>` en **2,4 GHz**, économie d'énergie désactivée, IP 192.168.137.1 vérifiée avec `ipconfig`
-- [ ] Règles du pare-feu Windows (8883, 443, 123 ; 1883 et 8000 pour le jalon 1 seulement)
+- [x] WSL2 (Ubuntu 26.04) + Docker Engine, `docker run hello-world` ; `equipe` dans les groupes `docker` et `video`
+- [x] Git, clone du dépôt dans WSL (`~/sentinel_x`) ; vision en Python 3.12 via `uv`
+- [x] Point d'accès mobile, IP 192.168.137.1 — [ ] **bande 2,4 GHz et économie d'énergie à vérifier**
+- [x] Relais `portproxy` + règles du pare-feu Windows pour 8000, 1883, 8080 (jalon 1) — [ ] 8883, 443, 123 au jalon 2
 - [ ] Service de temps Windows en serveur NTP
-- [ ] **Jalon 1** : `server/docker-compose.yml` avec mosquitto (1883), db, api (8000) ; tests `curl` et `mosquitto_pub` depuis un autre laptop
+- [x] **Jalon 1** : `server/docker-compose.yml` avec mosquitto (1883), api (8000), dashboard Caddy (8080) ; `curl` et `mosquitto_pub` testés depuis un autre laptop — **pas de db**
+- [x] Webcam C270 passée à WSL (`usbipd attach --wsl --busid 6-3`), `detect.py` dans `tmux`
 - [ ] **Jalon 2** : Mosquitto TLS 8883 + comptes + ACL, Caddy 443, fermeture de 1883 et 8000
 - [ ] Docker Desktop lancé à l'ouverture de session, services en `restart: unless-stopped`
 - [ ] Jour J : veille désactivée, Windows Update suspendu, laptop sur secteur
