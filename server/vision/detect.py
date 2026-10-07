@@ -14,11 +14,13 @@ Utilisation :
   python detect.py --source 1      caméra n°1
 """
 import argparse
+import datetime as dt
 import json
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from zoneinfo import ZoneInfo
 
 import cv2
 import numpy as np
@@ -211,6 +213,11 @@ def iou_touch(a, b, margin=0.15):
     return a[0] < x2 and a[2] > x1 and a[1] < y2 and a[3] > y1
 
 
+def is_off_hours(now: dt.datetime, start: dt.time, end: dt.time, work_days: set[int]) -> bool:
+    """Hors horaires : jour non ouvré, ou heure < start, ou heure >= end."""
+    return now.weekday() not in work_days or not (start <= now.time() < end)
+
+
 class Detector(threading.Thread):
     def __init__(self, cam, bus, args):
         super().__init__(daemon=True)
@@ -244,7 +251,15 @@ class Detector(threading.Thread):
         episode = {"warn": False, "fusion": False, "threat": False}
         last_alert = {}
         last_log = 0.0
+        # Heures ouvrées en heure de Paris : le conteneur, lui, est en UTC
+        tz = ZoneInfo(a.tz)
+        work_days = {int(d) for d in a.work_days.split(",")}
+        off_hours = False
         self.ready.set()
+
+        def hh(message):
+            """Hors horaires, toute alerte est préfixée (et passe en critique)."""
+            return f"Hors horaires : {message}" if off_hours else message
 
         def can_alert(key, gap=30):
             if time.time() - last_alert.get(key, 0) < gap:
@@ -275,6 +290,7 @@ class Detector(threading.Thread):
                         others.append({"label": label, "confidence": round(float(p), 2), "bbox": b})
 
             now = time.time()
+            off_hours = is_off_hours(dt.datetime.now(tz), a.work_start, a.work_end, work_days)
             h, w = frame.shape[:2]
             person = bool(persons)
             best = max(persons, default=(0.0, None))
@@ -317,7 +333,7 @@ class Detector(threading.Thread):
                   "bbox": best[1], "confirm": confirm, "confirm_needed": a.confirm,
                   "objects": danger, "threat": threat, "info_objects": info,
                   "abandoned": abandoned, "abandoned_s": abandoned_s, "present_s": present_s,
-                  "loitering": present_s >= a.loiter, "infer_ms": round(infer_ms, 1),
+                  "loitering": present_s >= a.loiter, "off_hours": off_hours, "infer_ms": round(infer_ms, 1),
                   "total_ms": round(total_ms, 1), "fps": round(fps, 1)}
             with self.lock:
                 self.status = st
@@ -325,19 +341,20 @@ class Detector(threading.Thread):
             # Alertes : une par épisode de présence, au plus une toutes les 30 s par type
             if locked and not episode["warn"] and can_alert("warn"):
                 episode["warn"] = True
-                self.bus.alert(source="vision", type="intrusion", severity="warning", dev=a.camera,
-                               message=f"Personne détectée (confiance {fr2(best[0])})", confidence=round(best[0], 2))
+                self.bus.alert(source="vision", type="intrusion", severity="critical" if off_hours else "warning",
+                               dev=a.camera, message=hh(f"Personne détectée (confiance {fr2(best[0])})"),
+                               confidence=round(best[0], 2), data={"off_hours": off_hours})
             if locked and self.bus.pir_recent() and not episode["fusion"] and can_alert("fusion"):
                 episode["fusion"] = True
                 self.bus.alert(source="fusion", type="intrusion", severity="critical", dev=self.bus.device[:32],
-                               message="Le PIR et la caméra concordent : intrusion confirmée",
-                               confidence=round(best[0], 2))
+                               message=hh("Le PIR et la caméra concordent : intrusion confirmée"),
+                               confidence=round(best[0], 2), data={"off_hours": off_hours})
             if threat and not episode["threat"] and can_alert("threat"):
                 episode["threat"] = True
                 top = max(danger, key=lambda o: o["confidence"])
                 self.bus.alert(source="vision", type="intrusion", severity="critical", dev=a.camera,
-                               message=f"Objet dangereux : {FR.get(top['label'], top['label'])} tenu par une personne",
-                               confidence=top["confidence"])
+                               message=hh(f"Objet dangereux : {FR.get(top['label'], top['label'])} tenu par une personne"),
+                               confidence=top["confidence"], data={"off_hours": off_hours})
 
             if now - last_log > 10:
                 last_log = now
@@ -417,6 +434,12 @@ def main():
     p.add_argument("--confirm", type=int, default=3, help="images consécutives pour confirmer")
     p.add_argument("--loiter", type=float, default=30, help="présence prolongée au-delà de N s")
     p.add_argument("--abandon", type=float, default=20, help="sac seul au-delà de N s")
+    p.add_argument("--work-start", type=dt.time.fromisoformat, default="08:30",
+                   help="début des heures ouvrées (HH:MM)")
+    p.add_argument("--work-end", type=dt.time.fromisoformat, default="17:00",
+                   help="fin des heures ouvrées (HH:MM) ; en dehors, toute alerte est critique")
+    p.add_argument("--work-days", default="0,1,2,3,4", help="jours ouvrés, 0 = lundi … 6 = dimanche")
+    p.add_argument("--tz", default="Europe/Paris", help="fuseau des heures ouvrées")
     p.add_argument("--camera", default="cam-01")
     p.add_argument("--mqtt", default="localhost")
     p.add_argument("--mqtt-port", type=int, default=1883)
