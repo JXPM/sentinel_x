@@ -16,7 +16,7 @@ export function CommandsPanel({ s }: { s: Sentinel }) {
       </div>
 
       <div className="cmd">
-        <div className="cmd-text"><strong>Buzzer <span className="pin">D6</span></strong><span>{buzzHint}</span></div>
+        <div className="cmd-text"><strong>Buzzer <span className="pin">D7</span></strong><span>{buzzHint}</span></div>
         <button type="button" className="btn" onClick={s.buzz} disabled={act.buzzing}>
           {act.buzzing ? 'Le buzzer sonne…' : 'Faire sonner le buzzer (2 s)'}
         </button>
@@ -38,12 +38,15 @@ export function CommandsPanel({ s }: { s: Sentinel }) {
 
       <div className="cmd">
         <div className="cmd-text" style={{ flex: '1 1 220px' }}>
-          <strong>Réponse automatique</strong>
-          <span>Fait sonner le buzzer quand une intrusion est confirmée par le PIR et la caméra.</span>
+          <strong>Buzzer sur détection</strong>
+          <span>{act.auto
+            ? 'Activé : le buzzer sonne quand le PIR détecte un mouvement (boîtier armé).'
+            : 'Désactivé : alarme silencieuse, même en cas de détection. Seul le dashboard est prévenu.'}</span>
         </div>
-        <button type="button" role="switch" className="switch" aria-checked={act.auto} aria-label="Réponse automatique" onClick={s.toggleAuto}>
-          <span />
-        </button>
+        <div className="seg" role="group" aria-label="Buzzer sur détection">
+          <button type="button" aria-pressed={act.auto} onClick={() => { if (!act.auto) s.toggleAuto(); }}>Activé</button>
+          <button type="button" aria-pressed={!act.auto} onClick={() => { if (act.auto) s.toggleAuto(); }}>Désactivé</button>
+        </div>
       </div>
     </section>
   );

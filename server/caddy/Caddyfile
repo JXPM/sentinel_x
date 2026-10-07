@@ -10,7 +10,7 @@
 	}
 	# Vision : detect.py tourne dans WSL hors Docker (webcam USB via usbipd)
 	handle /video* {
-		reverse_proxy host.docker.internal:8081
+		reverse_proxy vision:8081
 	}
 	handle {
 		root * /srv

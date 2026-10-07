@@ -251,7 +251,9 @@ function apiReducer(s: ApiState, a: ApiAction): ApiState {
           presence: Boolean(d.presence ?? d.pir),
         };
         const device: Device = { online: true, rssi: num(d.rssi), heap: num(d.heap) };
-        return { ...s, live: true, samples: [...history, sample].slice(-MAX_SAMPLES), device };
+        const mb = d.motion_buzzer;
+        const act = typeof mb === 'boolean' && mb !== s.act.auto ? { ...s.act, auto: mb } : s.act;
+        return { ...s, live: true, samples: [...history, sample].slice(-MAX_SAMPLES), device, act };
       }
       if (msg.kind === 'score') {
         const d = msg.data;

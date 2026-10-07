@@ -30,5 +30,19 @@ services:
     depends_on:
       - api
 
+  vision:
+    build:
+      context: ..
+      dockerfile: server/vision.Dockerfile
+    restart: unless-stopped
+    # Webcam C270 passée à WSL par usbipd (/dev/video0). /dev entier pour la retrouver
+    # si elle est rebranchée ; la règle n'autorise que les caméras (majeur 81).
+    volumes:
+      - /dev:/dev
+    device_cgroup_rules:
+      - "c 81:* rmw"
+    depends_on:
+      - mosquitto
+
 volumes:
   mosq-data:

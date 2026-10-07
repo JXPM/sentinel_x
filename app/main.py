@@ -42,3 +42,6 @@ def create_alert(alert: Alert):
 @app.get("/api/v1/alerts")
 def list_alerts(limit: int = 50):
       return alerts[-limit:]
+# --- Pont MQTT -> WebSocket vers le dashboard (boîtier ESP) ---
+from app.mqtt_bridge import setup as _setup_mqtt_bridge
+_setup_mqtt_bridge(app)
