@@ -18,5 +18,17 @@ services:
     depends_on:
       - mosquitto
 
+  dashboard:
+    build:
+      context: ..
+      dockerfile: server/dashboard.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - api
+
 volumes:
   mosq-data:
