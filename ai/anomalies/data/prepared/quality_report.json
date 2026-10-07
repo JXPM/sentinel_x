@@ -1,0 +1,53 @@
+{
+  "input_rows": 1000,
+  "missing_values": {
+    "timestamp": 0,
+    "device_id": 0,
+    "temperature": 0,
+    "humidity": 0,
+    "gas": 0,
+    "presence": 0,
+    "expected_scenario": 0
+  },
+  "invalid_rows": 0,
+  "duplicate_rows_removed": 0,
+  "output_rows": 1000,
+  "interval_seconds": {
+    "min": 5.0,
+    "median": 5.0,
+    "max": 5.0
+  },
+  "feature_columns": [
+    "temperature",
+    "humidity",
+    "gas",
+    "temperature_mean_60s",
+    "temperature_std_60s",
+    "temperature_slope_60s",
+    "humidity_mean_60s",
+    "humidity_std_60s",
+    "humidity_slope_60s",
+    "gas_mean_60s",
+    "gas_std_60s",
+    "gas_slope_60s",
+    "temperature_mean_300s",
+    "temperature_std_300s",
+    "temperature_slope_300s",
+    "humidity_mean_300s",
+    "humidity_std_300s",
+    "humidity_slope_300s",
+    "gas_mean_300s",
+    "gas_std_300s",
+    "gas_slope_300s",
+    "corr_temperature_gas_60s",
+    "corr_temperature_gas_300s"
+  ],
+  "feature_count": 23,
+  "feature_rows": 940,
+  "warmup_or_incomplete_rows": 60,
+  "train_rows": 540,
+  "evaluation_rows": 340,
+  "gap_rows": 60,
+  "cutoff": "2026-10-05T10:50:00Z",
+  "embargo_seconds": 300
+}
