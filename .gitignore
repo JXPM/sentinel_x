@@ -34,3 +34,9 @@ docs/.obsidian/workspace*.json
 docs/.obsidian/cache
 docs/.trash/
 bar_saas_venv/
+
+# Artifacts IA générés localement
+.codex_tmp/
+.tmp_pdf_reader/
+ai/anomalies/models/*.joblib
+ai/anomalies/reports/

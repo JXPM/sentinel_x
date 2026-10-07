@@ -59,3 +59,50 @@ Pour Isolation Forest, confirmer que la période d'entraînement représente un
 fonctionnement normal. Le contrôle des étiquettes actuel est une protection,
 pas une variable du modèle. Les données restent synthétiques : cette étape
 prépare l'entraînement, elle ne démontre pas encore la performance d'un modèle.
+
+## Étape 2 — Isolation Forest
+
+Installer les dépendances dans votre environnement puis lancer, depuis la racine :
+
+```powershell
+python -m pip install -r ai/anomalies/requirements.txt
+python ai/anomalies/train.py
+```
+
+Le script recalcule les variables avec `features.py`, utilise la même séparation
+chronologique et refuse une période d'entraînement étiquetée non normale.
+Seules les 23 colonnes `FEATURE_COLUMNS` entrent dans le modèle. StandardScaler
+est ajusté exclusivement sur l'entraînement, dans le même pipeline que le modèle.
+La standardisation n'est pas indispensable aux arbres mais garde une préparation
+explicite sauvegardée avec le modèle. Isolation Forest utilise 200 arbres,
+random_state=42 et contamination=0.01. Cette contamination fixe le quantile de
+la frontière sur l'entraînement ; elle ne garantit pas 1 % de fausses détections
+sur des données inédites. Aucun paramètre n'est optimisé sur l'évaluation.
+
+Sorties locales, ignorées par Git :
+- `models/iforest.joblib` : dictionnaire avec pipeline, ordre des variables,
+  fenêtres et version scikit-learn ; utiliser `bundle['model']` pour prédire.
+- `reports/isolation_forest/metrics.json` : taux de faux positifs par mesure,
+  précision/rappel/F1, matrice de confusion et délais par épisode.
+- `reports/isolation_forest/predictions.csv` : mesures, variables, scores et verdicts.
+- `reports/isolation_forest/evaluation_device_0.png` : capteurs et score brut.
+
+`predict` renvoie -1 (anomalie) ou +1 (normal). `decision_function` est négatif
+pour une anomalie et positif pour une mesure normale ; ce n'est ni une
+probabilité ni un score 0–1. Les zones orange du graphique sont les scénarios
+injectés ; les points rouges sont les détections. La sauvegarde est rechargée
+et les prédictions et scores sont comparés exactement avant de terminer.
+Ne charger que des fichiers joblib de confiance.
+
+Le taux de faux positifs utilise toutes les lignes étiquetées normales, y compris
+les retours au normal où les fenêtres contiennent encore l'incident précédent.
+Les métriques concernent des prédictions brutes, sans confirmation ni cooldown.
+Les épisodes sont détectés séparément par appareil ; un épisode manqué garde
+un délai null. Le délai part du début de l'épisode disponible dans l'évaluation.
+Pour des acquisitions dont un incident commence avant la période évaluée,
+ce délai n'est pas le délai depuis le véritable début de l'incident.
+
+Ce premier résultat sur deux épisodes synthétiques n'est pas une validation
+sur le matériel réel. Ne pas ajuster les paramètres sur ces résultats puis
+présenter la même période comme un test indépendant : prévoir une validation
+distincte pour régler le modèle et de nouvelles sessions pour le test final.
