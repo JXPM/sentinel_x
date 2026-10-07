@@ -8,6 +8,7 @@ En parallèle, un petit serveur HTTP sert le dashboard (port 8081 par défaut) :
   GET /video/status  état de la détection en JSON (boîte, confiance, confirmation, ms, FPS)
 """
 import argparse
+import datetime as dt
 import json
 import os
 import threading
@@ -178,9 +179,16 @@ def person_crop(frame: np.ndarray, box, margin: float = 0.25):
     return frame[y1:y2, x1:x2], x1, y1
 
 
+def is_off_hours(now: dt.datetime, start: dt.time, end: dt.time, work_days: set[int]) -> bool:
+    """Hors horaires : jour non ouvré, ou heure < start, ou heure >= end (heure locale du laptop)."""
+    return now.weekday() not in work_days or not (start <= now.time() < end)
+
+
 def send_alert(api_url: str, api_key: str, confidence: float, bbox, latency_ms: float,
-               confirm: int, objects: list[dict], reason: str = "presence") -> None:
-    """reason : presence, loitering, abandoned_object (warning) ; danger_object (critical)."""
+               confirm: int, objects: list[dict], reason: str = "presence",
+               off_hours: bool = False) -> None:
+    """reason : presence, loitering, abandoned_object (warning) ; danger_object (critical).
+    Hors horaires, toute alerte passe en critical."""
     alert_type = "intrusion"
     if reason == "abandoned_object":
         alert_type, severity = "anomaly", "warning"
@@ -193,6 +201,8 @@ def send_alert(api_url: str, api_key: str, confidence: float, bbox, latency_ms: 
         severity, message = "warning", f"Présence prolongée devant la caméra (conf {confidence:.2f})"
     else:
         severity, message = "warning", f"Personne détectée (conf {confidence:.2f})"
+    if off_hours:
+        severity, message = "critical", f"Hors horaires : {message}"
     payload = {
         "source": "vision",
         "type": alert_type,
@@ -201,7 +211,7 @@ def send_alert(api_url: str, api_key: str, confidence: float, bbox, latency_ms: 
         "message": message,
         "confidence": round(confidence, 3),
         "data": {"bbox": list(bbox), "latency_ms": round(latency_ms, 1), "confirm": confirm,
-                 "reason": reason, "objects": objects},
+                 "reason": reason, "off_hours": off_hours, "objects": objects},
     }
     try:
         r = requests.post(f"{api_url}/api/v1/alerts", json=payload,
@@ -325,6 +335,12 @@ def main() -> None:
                         help="secondes d'un sac seul (sans personne) avant « objet abandonné »")
     parser.add_argument("--loiter", type=float, default=30.0,
                         help="secondes de présence continue avant « présence prolongée »")
+    parser.add_argument("--work-start", type=dt.time.fromisoformat, default="08:30",
+                        help="début des heures ouvrées (HH:MM)")
+    parser.add_argument("--work-end", type=dt.time.fromisoformat, default="17:00",
+                        help="fin des heures ouvrées (HH:MM) ; après, toute alerte est critique")
+    parser.add_argument("--work-days", default="0,1,2,3,4",
+                        help="jours ouvrés, 0 = lundi … 6 = dimanche")
     parser.add_argument("--cooldown", type=float, default=10.0, help="secondes entre deux alertes")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--no-show", action="store_true", help="sans fenêtre (serveur)")
@@ -333,6 +349,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1", help="adresse du flux dashboard")
     parser.add_argument("--port", type=int, default=8081, help="port du flux dashboard (0 = désactivé)")
     args = parser.parse_args()
+    work_days = {int(d) for d in args.work_days.split(",")}
 
     if args.list_cameras:
         for path, name in list_cameras():
@@ -421,6 +438,7 @@ def main() -> None:
             alarm = consecutive >= args.confirm
             threat = threat_frames >= args.confirm
             loitering = alarm and present_s >= args.loiter
+            off_hours = is_off_hours(dt.datetime.now(), args.work_start, args.work_end, work_days)
 
             # Gravité croissante : une aggravation part tout de suite, sans attendre le cooldown
             reason = "danger_object" if threat else "loitering" if loitering else "presence"
@@ -432,7 +450,7 @@ def main() -> None:
                 if api_url:
                     threading.Thread(target=send_alert, daemon=True,
                                      args=(api_url, api_key, best[4], best[:4], total_ms[-1],
-                                           consecutive, objects, reason)).start()
+                                           consecutive, objects, reason, off_hours)).start()
                 else:
                     print(f"[alerte] {reason} conf={best[4]:.2f} {[o['label'] for o in objects]}"
                           " (API non configurée)")
@@ -455,7 +473,8 @@ def main() -> None:
                 if api_url:
                     threading.Thread(target=send_alert, daemon=True,
                                      args=(api_url, api_key, bag["confidence"], bag["bbox"],
-                                           total_ms[-1], 0, [bag], "abandoned_object")).start()
+                                           total_ms[-1], 0, [bag], "abandoned_object",
+                                           off_hours)).start()
                 else:
                     print(f"[alerte] objet abandonné : {bag['label']} (API non configurée)")
 
@@ -482,6 +501,7 @@ def main() -> None:
                 "threat": threat,
                 "present_s": round(present_s, 1),
                 "loitering": loitering,
+                "off_hours": off_hours,
                 "confirm_needed": args.confirm,
                 "infer_ms": round(float(np.mean(infer_ms)), 1),
                 "total_ms": round(float(np.mean(total_ms)), 1),

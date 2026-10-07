@@ -1,0 +1,20 @@
+# Jalon 1 : HTTP sur :80 (publié en 8080). Jalon 2 : HTTPS 443 avec notre CA.
+:80 {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /ws* {
+		reverse_proxy api:8000
+	}
+	# Vision : detect.py tourne dans WSL hors Docker (webcam USB via usbipd)
+	handle /video* {
+		reverse_proxy host.docker.internal:8081
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

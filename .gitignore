@@ -33,3 +33,4 @@ ai/**/*.pt
 docs/.obsidian/workspace*.json
 docs/.obsidian/cache
 docs/.trash/
+bar_saas_venv/
