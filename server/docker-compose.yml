@@ -20,6 +20,18 @@ services:
       - mosquitto
       - postgres
 
+  anomaly:
+    build:
+      context: ..
+      dockerfile: server/anomaly.Dockerfile
+    restart: unless-stopped
+    # Lit GET /api/v1/telemetry et poste ses alertes sur l'API, par le réseau Docker interne
+    environment:
+      SENTINEL_API_URL: http://api:8000
+      DEV: edge01
+    depends_on:
+      - api
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped

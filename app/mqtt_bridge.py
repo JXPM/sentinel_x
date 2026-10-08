@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 from fastapi import Response, WebSocket, WebSocketDisconnect
 
-from app import db
+from app import db, mq2
 
 log = logging.getLogger("uvicorn.error")
 
@@ -71,8 +71,13 @@ def _telemetry(dev: str, d: dict) -> dict:
     d.setdefault("device", dev)
     d["device_ts"] = d.get("ts")
     d["ts"] = time.time()                     # heure du serveur : l'ESP n'a pas toujours l'heure
-    if "gas" not in d:
-        d["gas"] = d.get("gas_raw")           # le dashboard lit "gas"
+    # gaz en ppm (courbe du MQ-2) dès que le capteur est préchauffé et R0 calibré
+    raw = d.get("gas_raw", d.get("gas"))
+    d["gas_ppm"] = mq2.ppm(raw) if raw is not None and d.get("gas_ready", True) else None
+    if d["gas_ppm"] is not None:
+        d["gas"], d["gas_unit"] = d["gas_ppm"], "ppm"
+    elif "gas" not in d:
+        d["gas"], d["gas_unit"] = raw, "raw"     # le dashboard lit "gas"
     if "presence" not in d:
         d["presence"] = bool(d.get("motion"))  # le dashboard lit "presence"
     return {"kind": "telemetry", "data": d}

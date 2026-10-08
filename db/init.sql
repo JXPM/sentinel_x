@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS telemetry (
     dev         VARCHAR(32)  NOT NULL,
     temperature REAL,
     humidity    REAL,
-    gas         INTEGER,
+    gas         INTEGER,      -- lecture brute du MQ-2 (0-1023)
+    gas_ppm     REAL,         -- estimation en ppm (app/mq2.py), NULL tant que le capteur n'est pas calibré
     presence    BOOLEAN,
     rssi        SMALLINT,
     heap        INTEGER

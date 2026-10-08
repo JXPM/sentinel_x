@@ -10,6 +10,8 @@ services:
       DASHBOARD_USER: sentinel
       DASHBOARD_PASS_HASH: "pbkdf2_sha256:310000:a-generer:a-generer"
       SESSION_SECRET: "a-generer-avec-openssl-rand-hex-32"
+      # MQ-2 : R0 donné par GET /api/v1/mq2/calibration (capteur préchauffé, air propre)
+      MQ2_R0_KOHM: "3.8"
   postgres:
     environment:
       POSTGRES_PASSWORD: "mot-de-passe-postgres"

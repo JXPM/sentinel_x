@@ -37,6 +37,8 @@ def _connection():
     _last_try = time.time()
     try:
         _conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=3)
+        # base créée avant l'ajout des ppm : on ajoute la colonne sans recréer le volume
+        _conn.execute("ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS gas_ppm REAL")
         log.info("[db] connecté à PostgreSQL")
     except Exception as e:
         _conn = None
@@ -105,15 +107,40 @@ def ack_alert(alert_id: int, by: str = "dashboard") -> bool:
 
 
 def insert_telemetry(dev: str, d: dict) -> None:
-    gas = d.get("gas", d.get("gas_raw"))
+    gas = d.get("gas_raw", d.get("gas"))
     presence = d.get("presence", d.get("motion"))
     _run(
-        "INSERT INTO telemetry (dev, temperature, humidity, gas, presence, rssi, heap) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        "INSERT INTO telemetry (dev, temperature, humidity, gas, gas_ppm, presence, rssi, heap)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
         (str(dev)[:32], d.get("temperature"), d.get("humidity"),
-         int(gas) if gas is not None else None,
+         int(gas) if gas is not None else None, d.get("gas_ppm"),
          bool(presence) if presence is not None else None,
          d.get("rssi"), d.get("heap")),
     )
+
+
+def telemetry_range(start, end, dev: str | None) -> list[dict] | None:
+    """Mesures d'une période, gaz en ppm (contrat de ai/anomalies/api_client.py)."""
+    sql = ("SELECT ts, dev, temperature, humidity, gas_ppm FROM telemetry"
+           " WHERE ts >= %s AND ts <= %s AND gas_ppm IS NOT NULL AND temperature IS NOT NULL AND humidity IS NOT NULL")
+    params = [start, end]
+    if dev:
+        sql += " AND dev = %s"
+        params.append(dev)
+    rows = _run(sql + " ORDER BY ts", tuple(params), fetch="all")
+    if rows is None:
+        return None
+    return [{"ts": r[0].isoformat(), "dev": r[1], "temperature": r[2], "humidity": r[3], "gas": r[4]} for r in rows]
+
+
+def recent_gas_raw(dev: str | None, seconds: int = 120) -> list[int] | None:
+    sql = "SELECT gas FROM telemetry WHERE ts > now() - make_interval(secs => %s) AND gas IS NOT NULL"
+    params = [seconds]
+    if dev:
+        sql += " AND dev = %s"
+        params.append(dev)
+    rows = _run(sql, tuple(params), fetch="all")
+    return None if rows is None else [r[0] for r in rows]
 
 
 _CMD_TARGETS = {"buzzer", "led_red", "led_green", "auto"}
