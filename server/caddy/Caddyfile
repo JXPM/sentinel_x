@@ -1,24 +1,52 @@
 # Jalon 1 : HTTP sur :80 (publié en 8080). Jalon 2 : HTTPS 443 avec notre CA.
+# Accès protégé par session : la page /login est publique, tout le reste passe par
+# GET /api/v1/auth/check (forward_auth). Sans session : redirection vers /login pour
+# le navigateur, 401 pour les appels de l'API.
 :80 {
-	basic_auth {
-		sentinel $2a$14$tcJHxB8Oz7wP19MwqD2JN.lkkRlR7k4fVz6OPM0uz74P9vays8tcu
-	}
-
 	encode gzip
 
-	handle /api/* {
+	@html header Accept *text/html*
+
+	# Public : page de connexion, ses polices et son logo, routes de connexion
+	handle /api/v1/auth/* {
 		reverse_proxy api:8000
 	}
-	handle /ws* {
-		reverse_proxy api:8000
-	}
-	# Vision : detect.py tourne dans WSL hors Docker (webcam USB via usbipd)
-	handle /video* {
-		reverse_proxy vision:8081
-	}
-	handle {
+	handle /login {
 		root * /srv
-		try_files {path} /index.html
+		rewrite * /login.html
 		file_server
+	}
+	@public path /login.html /logo-serpent.svg /fonts/*
+	handle @public {
+		root * /srv
+		file_server
+	}
+
+	# Tout le reste exige une session valide
+	handle {
+		route {
+			forward_auth api:8000 {
+				uri /api/v1/auth/check
+				@denied status 401
+				handle_response @denied {
+					redir @html /login 302
+					respond 401
+				}
+			}
+			handle /api/* {
+				reverse_proxy api:8000
+			}
+			handle /ws* {
+				reverse_proxy api:8000
+			}
+			handle /video* {
+				reverse_proxy vision:8081
+			}
+			handle {
+				root * /srv
+				try_files {path} /index.html
+				file_server
+			}
+		}
 	}
 }

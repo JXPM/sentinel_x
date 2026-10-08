@@ -1,6 +1,15 @@
 import { timeOf } from '../lib/format';
 import type { Sentinel } from '../types';
 
+// Ferme la session (cookie supprimé par l'API) puis renvoie vers la page de connexion
+async function logout() {
+  try {
+    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } finally {
+    location.replace('/login');
+  }
+}
+
 export function TopBar({ title, s }: { title: string; s: Sentinel }) {
   const live = s.demo ? s.demo.playing : s.link === 'online';
   const label = s.demo ? (s.demo.playing ? 'En direct' : 'En pause') : s.link === 'online' ? 'Connecté' : 'Reconnexion…';
@@ -19,6 +28,9 @@ export function TopBar({ title, s }: { title: string; s: Sentinel }) {
           <button type="button" className="btn" aria-pressed={!s.demo.playing} onClick={s.demo.togglePlay}>
             {s.demo.playing ? 'Mettre en pause' : 'Reprendre'}
           </button>
+        )}
+        {!s.demo && (
+          <button type="button" className="btn" onClick={logout}>Se déconnecter</button>
         )}
       </div>
     </header>

@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from app import db
+from app import auth, db
 
 app = FastAPI()
 
@@ -50,4 +50,5 @@ def list_alerts(limit: int = 50):
       return rows if rows is not None else alerts[-limit:]
 # --- Pont MQTT -> WebSocket vers le dashboard (boîtier ESP) ---
 from app.mqtt_bridge import setup as _setup_mqtt_bridge
+auth.setup(app)
 _setup_mqtt_bridge(app)

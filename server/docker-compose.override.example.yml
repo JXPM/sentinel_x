@@ -6,6 +6,10 @@ services:
       MQTT_USER: api
       MQTT_PASS: "a-remplacer"
       DATABASE_URL: "postgresql://sentinel:mot-de-passe-postgres@postgres:5432/sentinel"
+      # Connexion au dashboard : python3 -m app.auth "mot de passe" donne l'empreinte
+      DASHBOARD_USER: sentinel
+      DASHBOARD_PASS_HASH: "pbkdf2_sha256:310000:a-generer:a-generer"
+      SESSION_SECRET: "a-generer-avec-openssl-rand-hex-32"
   postgres:
     environment:
       POSTGRES_PASSWORD: "mot-de-passe-postgres"
