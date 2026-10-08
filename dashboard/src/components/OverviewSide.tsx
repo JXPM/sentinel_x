@@ -4,8 +4,21 @@ import { AlertItem } from './AlertItem';
 
 export function OverviewSide({ s, onTab }: { s: Sentinel; onTab: (t: TabId) => void }) {
   const unacked = s.alerts.filter((a) => !a.acked).length;
+  const alerte = s.banner.level !== 'ok';          // une alerte est en cours sur le site
+  const voyant = alerte ? '#FF5C7A' : '#34D3A6';   // rouge si alerte, vert sinon
   return (
     <div className="col" style={{ flex: '1 1 340px' }}>
+      <section className="card" aria-label="Voyant d'état" style={{ gap: 14 }}>
+        <h2>Voyant d'état</h2>
+        <div className="led-row">
+          <span className="led big" style={{ background: voyant, boxShadow: '0 0 12px ' + voyant }} />
+          <div className="led-text">
+            <strong>{alerte ? 'Alerte en cours' : 'Système normal'}</strong>
+            <span>{alerte ? 'Au moins une alerte est active' : 'Aucune alerte'}</span>
+          </div>
+        </div>
+      </section>
+
       <section className="card" aria-label="Dernières alertes" style={{ gap: 14 }}>
         <div className="card-head">
           <h2>Dernières alertes</h2>
