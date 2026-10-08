@@ -4,7 +4,8 @@
 - relaie la télémétrie, l'état et les alertes du boîtier sur /ws, au format attendu par le dashboard
   ({"kind": "telemetry" | "status" | "alert", "data": {...}}) ;
 - enregistre les alertes du boîtier via POST /api/v1/alerts ;
-- transmet au boîtier les commandes du dashboard (POST /api/v1/commands, PATCH /api/v1/alerts/{id}/ack).
+- transmet au boîtier les commandes du dashboard (POST /api/v1/commands, PATCH /api/v1/alerts/{id}/ack) ;
+- enregistre télémétrie, acquittements et commandes dans PostgreSQL quand la base est disponible (app/db.py).
 """
 import asyncio
 import json
@@ -17,6 +18,8 @@ from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 from fastapi import Response, WebSocket, WebSocketDisconnect
+
+from app import db, mq2
 
 log = logging.getLogger("uvicorn.error")
 
@@ -68,8 +71,13 @@ def _telemetry(dev: str, d: dict) -> dict:
     d.setdefault("device", dev)
     d["device_ts"] = d.get("ts")
     d["ts"] = time.time()                     # heure du serveur : l'ESP n'a pas toujours l'heure
-    if "gas" not in d:
-        d["gas"] = d.get("gas_raw")           # le dashboard lit "gas"
+    # gaz en ppm (courbe du MQ-2) dès que le capteur est préchauffé et R0 calibré
+    raw = d.get("gas_raw", d.get("gas"))
+    d["gas_ppm"] = mq2.ppm(raw) if raw is not None and d.get("gas_ready", True) else None
+    if d["gas_ppm"] is not None:
+        d["gas"], d["gas_unit"] = d["gas_ppm"], "ppm"
+    elif "gas" not in d:
+        d["gas"], d["gas_unit"] = raw, "raw"     # le dashboard lit "gas"
     if "presence" not in d:
         d["presence"] = bool(d.get("motion"))  # le dashboard lit "presence"
     return {"kind": "telemetry", "data": d}
@@ -154,6 +162,7 @@ def _on_message(client, userdata, msg):
         if kind == "telemetry":
             m = _telemetry(dev, json.loads(payload))
             _last_telemetry, _last_seen = m, time.time()
+            db.insert_telemetry(dev, m["data"])
             _device_base = "/".join(parts[:-1])
             if not _device_online:
                 _device_online = True
@@ -234,11 +243,14 @@ def setup(app) -> None:
             sent = _publish_config({"motion_buzzer": action == "on"})
         else:
             sent = False                      # LEDs : pas gérées par ce boîtier
+        if sent:
+            await asyncio.to_thread(db.log_command, target, action or "pulse")
         return {"sent": sent, "target": target, "action": action}
 
     @app.patch("/api/v1/alerts/{alert_id}/ack", status_code=204)
     async def ack(alert_id: int):
         _publish_cmd({"action": "ack"})       # le boîtier coupe son buzzer
+        await asyncio.to_thread(db.ack_alert, alert_id)
         return Response(status_code=204)
 
     @app.get("/api/v1/bridge")
@@ -248,6 +260,7 @@ def setup(app) -> None:
             "device": {"online": _device_online, "topic": _device_base,
                        "last_seen_s": round(time.time() - _last_seen, 1) if _last_seen else None},
             "websockets": len(_clients),
+            "database": await asyncio.to_thread(db.available),
             "last_telemetry": _last_telemetry["data"] if _last_telemetry else None,
         }
 

@@ -17,7 +17,7 @@ interface ChartDef {
 
 const CHARTS: ChartDef[] = [
   { label: 'Température', key: 'temp', min: 15, max: 45, ref: TEMP_REF, refLabel: 'référence 40 °C', color: '#FF9466', fill: 'rgba(255,148,102,.08)', unit: '°C', dec: 1 },
-  { label: 'Gaz (indice brut MQ-2)', key: 'gas', min: 0, max: 500, ref: GAS_REF, refLabel: 'référence 400', color: '#827AFF', fill: 'rgba(130,122,255,.10)', unit: '', dec: 0 },
+  { label: 'Gaz (MQ-2)', key: 'gas', min: 0, max: 500, ref: GAS_REF, refLabel: 'référence 400', color: '#827AFF', fill: 'rgba(130,122,255,.10)', unit: '', dec: 0 },
 ];
 
 function Chart({ def, samples }: { def: ChartDef; samples: Sample[] }) {

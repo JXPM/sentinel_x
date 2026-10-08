@@ -24,6 +24,7 @@ export interface Sample {
   temp: number;
   hum: number;
   gas: number;
+  gasUnit?: 'ppm' | 'raw'; // ppm dès que le serveur a calibré le MQ-2, sinon lecture brute (démo, avant calibration)
   score: number; // score d'anomalie 0..1
   presence: boolean;
 }

@@ -38,13 +38,14 @@ export function SensorTiles({ s }: { s: Sentinel }) {
   const recent = samples.slice(-Math.round(200 / secsPerSample));
   const f = forecast(samples, secsPerSample);
   const tState: ChipKind = last.temp >= TEMP_REF ? 'crit' : rising(f, 'temp', secsPerSample) ? 'rising' : 'stable';
+  const gasPpm = last.gasUnit === 'ppm';
   const gState: ChipKind = last.gas >= GAS_REF ? 'crit' : rising(f, 'gas', secsPerSample) ? 'rising' : 'stable';
   const lastMotion = [...samples].reverse().find((x) => x.presence);
 
   const tiles: Tile[] = [
     { label: 'Température', icon: 'thermometer', color: 'var(--temp)', value: fr(last.temp, 1), unit: '°C', spark: spark(recent.map((x) => x.temp)), foot: trend(last.temp - ago.temp, '°C', 0.3, 1), chip: tState, alarm: tState === 'crit' },
     { label: 'Humidité', icon: 'droplet', color: 'var(--hum)', value: fr(last.hum, 0), unit: '%', spark: spark(recent.map((x) => x.hum)), foot: trend(last.hum - ago.hum, '%', 1, 0), chip: 'stable', alarm: false },
-    { label: 'Gaz', icon: 'flame', color: 'var(--brand)', value: String(Math.round(last.gas)), unit: 'indice', spark: spark(recent.map((x) => x.gas)), foot: trend(last.gas - ago.gas, 'pts', 6, 0), chip: gState, alarm: gState === 'crit' },
+    { label: 'Gaz', icon: 'flame', color: 'var(--brand)', value: gasPpm && last.gas < 10 ? last.gas.toFixed(1).replace('.', ',') : String(Math.round(last.gas)), unit: gasPpm ? 'ppm' : 'indice', spark: spark(recent.map((x) => x.gas)), foot: trend(last.gas - ago.gas, gasPpm ? 'ppm' : 'pts', 6, gasPpm ? 1 : 0), chip: gState, alarm: gState === 'crit' },
     {
       label: 'Présence (PIR)', icon: 'eye', color: 'var(--text)', value: last.presence ? 'Oui' : 'Non', unit: '',
       spark: pathOf(recent.map((x) => (x.presence ? 1 : 0)), -0.2, 1.2, 200, 40),
