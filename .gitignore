@@ -35,6 +35,15 @@ docs/.obsidian/cache
 docs/.trash/
 bar_saas_venv/
 
+<<<<<<< HEAD
 # Mots de passe MQTT locaux (voir server/docker-compose.override.example.yml)
 server/docker-compose.override.yml
 *.log
+# Artifacts IA générés localement
+.codex_tmp/
+.tmp_pdf_reader/
+ai/anomalies/models/*.joblib
+ai/anomalies/reports/
+# Données synthétiques et préparation régénérables
+ai/anomalies/data/
+>>>>>>> origin/feat/ia/anomalies
