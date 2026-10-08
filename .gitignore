@@ -42,5 +42,4 @@ ai/anomalies/models/*.joblib
 ai/anomalies/reports/
 
 # Données synthétiques et préparation régénérables
-ai/anomalies/data/sessions_v*/
-ai/anomalies/data/prepared/
+ai/anomalies/data/

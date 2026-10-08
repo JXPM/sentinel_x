@@ -1,247 +1,173 @@
-﻿# IA — Détection d’anomalies Sentinel-X
+﻿# IA — Entraînement synthétique, détection sur les mesures réelles
 
-Le pipeline prépare les mesures et entraîne Isolation Forest sur le normal.
-La configuration retenue utilise **une seule fenêtre de 60 secondes et 13 variables**.
-Le candidat est évalué sur données synthétiques ; les vrais capteurs restent à valider.
-Random Forest et le service MQTT en direct ne sont pas encore implémentés.
+## Flux retenu
 
-## Organisation
+```text
+generate_sample_data.py → CSV synthétique normal (gaz en ppm)
+                                      ↓
+                       train.py → modèle Isolation Forest
+                                      ↓
+PostgreSQL → API → api_client.py → detect.py → scores et verdicts
+```
 
-| Emplacement | Rôle |
+`features.py` calcule les mêmes 13 variables sur une fenêtre de 60 secondes à
+l’entraînement et à la détection. Aucune connexion directe à PostgreSQL,
+aucun apprentissage automatique sur les nouvelles mesures réelles.
+L’application du modèle produit des prédictions, pas une évaluation de sa
+qualité : il faut des périodes normales et incidents annotés pour mesurer
+les fausses détections, incidents manqués et délais.
+
+## Fichiers
+
+| Fichier | Rôle |
 |---|---|
-| `features.py` | Validation et calculs communs à l’apprentissage et la prédiction |
-| `prepare_data.py` | Préparation du CSV historique |
-| `train.py` | Apprentissage et évaluation sur le CSV historique |
-| `generate_sample_data.py` | Génération de sessions synthétiques reproductibles |
-| `experiments/train_sessions.py` | Apprentissage et validation par sessions |
-| `experiments/compare_windows.py` | Comparaison historique des fenêtres |
-| `experiments/diagnose_false_positives.py` | Analyse des fausses détections |
-| `tests/` | Tests automatiques du code |
-| `data/`, `models/`, `reports/` | Données, modèles et résultats locaux |
+| `generate_sample_data.py` | Générer des mesures normales fictives au format telemetry |
+| `train.py` | Entraîner sur ce CSV et sauvegarder le modèle |
+| `features.py` | Contrôler le contrat et calculer les variables sur 60 s |
+| `api_client.py` | Recevoir les mesures réelles via l’API |
+| `detect.py` | Charger le modèle puis analyser une période ou fonctionner en continu |
+| `tests/` | Vérifications automatiques avec données et API simulées |
 
-Les tests du code sont différents des sessions CSV `data/sessions_v1/test/`,
-réservées à l’évaluation finale du modèle.
+Les anciens CSV, modèles et rapports ne sont plus les entrées du parcours actuel.
 
 ## Installation
 
-Depuis la racine du dépôt, sous PowerShell :
+Depuis la racine du dépôt, avec l’environnement Python activé :
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 python -m pip install -r ai/anomalies/requirements.txt
 ```
 
-Créer l’environnement seulement s’il n’existe pas déjà.
-
-## Parcours actuel : sessions séparées
-
-### Qu’est-ce qu’une session ?
-
-Une session est une période d’enregistrement des capteurs, conservée dans un
-CSV contenant plusieurs mesures successives. Avec les vrais capteurs, ce sera
-par exemple un enregistrement normal du lundi matin, un autre du lundi
-après-midi ou un enregistrement avec un scénario de surchauffe le mardi.
-Nos sessions actuelles simulent ces acquisitions ; elles sont synthétiques.
-
-Plusieurs sessions permettent de couvrir les variations normales et d’évaluer
-le modèle sur d’autres acquisitions que celles utilisées pour apprendre :
-
-- `train/` : sessions normales pour apprendre le fonctionnement habituel.
-- `validation/` : sessions distinctes pour mesurer les résultats et régler le modèle.
-- `test/` : sessions réservées à l’évaluation finale, après fixation des choix.
-
-Une session n’est pas une fenêtre : elle contient un enregistrement complet,
-tandis que la fenêtre glissante utilise les 60 dernières secondes de cet
-enregistrement à chaque mesure. Les variables sont calculées séparément pour
-chaque session : le début d’une session n’utilise pas la fin de la précédente.
-
-### Quel script appelle quel fichier ?
-
-`features.py` contient les fonctions communes de validation, de calcul des
-variables et de séparation chronologique. Ce fichier est importé par les scripts ;
-il n’est pas nécessaire de le lancer directement.
-
-`prepare_data.py` lit le CSV historique, appelle ces fonctions et exporte les
-CSV nettoyé, d’entraînement et d’évaluation pour les examiner. Il n’entraîne
-aucun modèle.
-
-**`train.py` utilise directement `features.py`, mais n’appelle pas
-`prepare_data.py` et ne lit pas ses CSV exportés.** Il relit le CSV source,
-effectue lui-même la préparation et la séparation, puis entraîne et évalue
-Isolation Forest. Lancer `prepare_data.py` avant lui est donc facultatif.
-
-```text
-CSV source → prepare_data.py → fonctions de features.py → CSV préparés
-CSV source → train.py        → fonctions de features.py → modèle + résultats
-```
-
-Pour le parcours par sessions, `experiments/train_sessions.py` appelle aussi
-`features.py`, mais prépare chaque session séparément. La répartition entre
-train, validation et test est déjà définie par les dossiers et le manifest :
-il n’utilise ni `prepare_data.py` ni sa coupure chronologique.
-
-### Commandes
+## 1. Générer les données normales fictives
 
 ```powershell
 python ai/anomalies/generate_sample_data.py
-python ai/anomalies/experiments/train_sessions.py
 ```
 
-Le générateur crée `data/sessions_v1/` sans modifier le CSV historique. Il refuse
-un dossier existant : si les sessions sont présentes, passer à l’entraînement.
-Pour une nouvelle version :
+Sorties : `data/synthetic_normal_ppm.csv` et son fichier JSON de paramètres.
+Par défaut : 10 800 mesures toutes les 2 s, soit environ 6 h. Champs compatibles
+avec telemetry : `ts`, `dev`, `temperature`, `humidity`, `gas` ; métadonnées
+`data_origin=synthetic`, `gas_unit=ppm`, `expected_scenario=normal`.
+Les niveaux normaux d’exemple sont 24 °C, 55 % et 120 ppm. **120 ppm est une
+valeur illustrative, pas une calibration ni une concentration normale garantie
+pour votre gaz.** Adapter les paramètres au capteur et au gaz réellement mesuré :
 
 ```powershell
-python ai/anomalies/generate_sample_data.py --output ai/anomalies/data/sessions_v2 --seed 20261009
+python ai/anomalies/generate_sample_data.py --gas-ppm 120 --gas-noise-ppm 2.2 --temperature 24 --humidity 55 --seed 42
 ```
 
-| Ensemble | Sessions | Mesures brutes | Usage |
-|---|---:|---:|---|
-| train | 6 | 10 800 | Normal uniquement pour apprendre |
-| validation | 3 | 5 400 | Évaluation et réglages |
-| test | 3 | 5 400 | Test final après fixation des choix |
+La même graine reproduit les mêmes mesures. Le gaz est non négatif, entier
+comme `telemetry.gas INTEGER`, sans plafond ADC de 1023. La commande remplace
+ses sorties ; utiliser `--output` pour conserver plusieurs versions.
+Les modèles entraînés sur une simulation peu représentative peuvent déclarer
+anormal un fonctionnement réel normal. Les niveaux, bruit et cycles devront
+être ajustés à partir d’observations du matériel, sans utiliser les incidents
+comme fonctionnement normal.
 
-Chaque session contient 1 800 mesures espacées de 5 s. Les graines, niveaux,
-cycles et bruits varient. Validation et test contiennent normal, surchauffe,
-gaz, incident combiné et pic de gaz, avec montée, plateau et retour progressif.
-Le retour injecté reste étiqueté incident jusqu’à la fin de la perturbation.
-`manifest.json` décrit graines, événements, répartition et empreintes CSV.
-Toutes les sessions partagent la même famille de simulation : elles ne
-remplacent pas une validation sur le matériel réel.
-
-L’entraînement vérifie les empreintes et prépare chaque session séparément,
-sans transfert d’historique entre sessions. Il lit seulement train et validation
-et refuse le split test. Après les 12 mesures initiales par session, il reste
-10 728 lignes d’apprentissage et 5 364 de validation.
-
-Le pipeline StandardScaler + Isolation Forest utilise 200 arbres,
-contamination=0.01 et random_state=42. Il est ajusté exclusivement sur le normal
-d’apprentissage. La standardisation n’est pas indispensable aux arbres mais
-est sauvegardée avec le modèle. La contamination règle la frontière sur
-l’apprentissage ; elle ne garantit pas 1 % de fausses détections en validation.
-
-### Sorties et résultats
-
-- `models/iforest_sessions_60s.joblib` : candidat distinct du modèle historique.
-- `reports/sessions_60s/validation_metrics.json` : résultats globaux et par session.
-- `reports/sessions_60s/validation_predictions.csv` : scores et verdicts.
-- `reports/sessions_60s/validation-XX/evaluation_device_0.png` : graphiques.
-
-Le fichier joblib contient un dictionnaire : `bundle['model']` est le pipeline,
-`bundle['feature_columns']` définit les entrées et `bundle['windows_seconds']`
-vaut `(60,)`. Le rechargement des scores et verdicts est vérifié exactement.
-Ne charger que des fichiers joblib de confiance.
-
-Avec les données et paramètres par défaut : **12 épisodes détectés sur 12**,
-**122 fausses détections sur 4 393 mesures normales (2,78 %)**,
-**911 mesures anormales détectées sur 971 (93,82 %)**, délais de **0 à 65 s**.
-Les métriques sont par mesure, sans confirmation d’alerte ni cooldown : 122
-fausses détections ne signifie pas 122 alertes. La récupération reste incluse.
-Un épisode manqué reçoit un délai null ; une détection à 0 s peut correspondre
-à un verdict déjà anormal avant l’incident. Le retour normal exige une séquence
-de verdicts normaux couvrant 60 s ; le rapport distingue début et confirmation.
-
-Pour essayer un réglage sur validation avec des sorties séparées :
+## 2. Entraîner Isolation Forest
 
 ```powershell
-python ai/anomalies/experiments/train_sessions.py --contamination 0.005 --model-path ai/anomalies/models/candidate_005.joblib --report-dir ai/anomalies/reports/candidate_005
-```
-
-Ajouter `--data-dir ai/anomalies/data/sessions_v2` pour une autre version.
-Figer les choix sur validation avant d’évaluer le test. Le test final n’a pas
-été évalué ; son script d’évaluation reste à créer. Ne pas comparer directement
-ces taux à ceux de l’ancien CSV : les acquisitions et scénarios diffèrent.
-
-## Préparation et fonctionnement futur en direct
-
-`validate_data()` convertit les dates en UTC et vérifie les identifiants et
-capteurs numériques : température -40 à 80 °C, humidité 0 à 100 %, gaz ADC
-0 à 1023 (pas des ppm). Les lignes invalides sont rejetées et comptées ; les
-doublons sont retirés et les mesures contradictoires au même appareil/horodatage
-provoquent une erreur. Aucune interpolation ni suppression statistique des
-valeurs inhabituelles. Cela ne garantit pas la calibration physique.
-
-`build_features()` produit 13 variables : trois mesures actuelles, moyenne,
-écart-type et pente sur 60 s pour chaque capteur, corrélation température/gaz.
-La fenêtre `[t - 60 s, t]` inclut les bornes et ne lit pas le futur : 13 mesures
-à cadence de 5 s. Les pentes sont des régressions sur les vrais horodatages,
-en unités par seconde. La corrélation est nulle par convention pour un signal
-constant ; positive ne signifie pas forcément hausse.
-
-Les calculs sont séparés par appareil. Après une interruption de plus de 15 s,
-l’historique recommence. Une minute est nécessaire au démarrage ; ensuite une
-prédiction pourra être produite à chaque mesure. Le futur service doit conserver
-60 s d’historique, borne initiale comprise, et utiliser les mêmes fonctions.
-Si aucune ligne n’est prête pour la dernière mesure, attendre. Adapter la
-tolérance de panne à la cadence réelle.
-
-Seules les colonnes de `FEATURE_COLUMNS` entrent dans le modèle. Dates,
-identifiants, présence, origine et étiquettes sont des métadonnées.
-`predict()` renvoie -1 pour anomalie, +1 pour normal. `decision_function()` est
-négatif pour une anomalie : ni une probabilité ni un score entre 0 et 1.
-
-## CSV historique
-
-```powershell
-python ai/anomalies/prepare_data.py
 python ai/anomalies/train.py
 ```
 
-La préparation exporte `data/prepared/clean.csv`, `train.csv`, `evaluation.csv`
-et `quality_report.json`. Le CSV nettoyé contient les mesures ; train et
-évaluation contiennent aussi les variables. Pour les 1 000 mesures historiques :
-588 lignes d’apprentissage, 388 d’évaluation, 12 d’historique initial et 12
-d’embargo. Coupure : 5 octobre 2026 à 10:50 UTC, évaluation à 10:51 UTC.
-L’embargo de 60 s évite le chevauchement des fenêtres. Adapter `--csv` et
-`--cutoff` aux acquisitions ; la période d’apprentissage doit être normale.
+`train.py` lit le CSV synthétique, vérifie les métadonnées, appelle `features.py`,
+puis ajuste StandardScaler et Isolation Forest : 200 arbres, contamination=0.01,
+random_state=42. Toutes les fenêtres normales exploitables servent à apprendre ;
+pas de découpage automatique train/validation/test dans ce parcours.
+Les 30 premières mesures à cadence 2 s constituent la minute d’historique.
+Minimum technique : 100 fenêtres exploitables, sans garantie de représentativité.
 
-`train.py` recalcule la préparation et écrit `models/iforest.joblib` et
-`reports/isolation_forest/`. Le relancer remplace les anciens résultats à ces
-emplacements. Il utilise maintenant 60 s et 13 variables. Le générateur avec
-`--legacy` écrase explicitement le CSV historique ; inutile pour les sessions.
+Sorties :
 
-## Expériences historiques
+- `models/iforest_synthetic_ppm_60s.joblib` : nouveau modèle et configuration ppm.
+- `reports/synthetic_training/training_report.json` : paramètres et provenance.
 
-```powershell
-python ai/anomalies/experiments/compare_windows.py
-python ai/anomalies/experiments/diagnose_false_positives.py
+Le rechargement des scores et verdicts est vérifié exactement. Un fichier joblib
+contient un dictionnaire avec `model`, `feature_columns`, `windows_seconds` et
+`gas_unit`. Ne charger que des modèles de confiance. Relancer remplace ces
+sorties ; utiliser `--model-path` et `--report-dir` pour conserver un candidat.
+Le rapport n’annonce aucun taux de faux positifs validé sur les vrais capteurs.
+
+## 3. Détecter sur les mesures réelles via l’API
+
+URL : **À RENSEIGNER**. Route par défaut : `/api/v1/telemetry`.
+Paramètres documentés : `from`, `to`, `dev`. Le client attend une liste JSON :
+
+```json
+[{"ts":"2026-10-08T08:00:00Z","dev":"sx-001","temperature":24.1,"humidity":55.2,"gas":120}]
 ```
 
-La comparaison conserve 60 s, 300 s et la combinaison, avec les mêmes 540
-lignes d’apprentissage et 340 d’évaluation et un embargo de 300 s. Elle écrit
-`reports/window_comparison/` sans remplacer le modèle. La fenêtre 300 s reste
-accessible pour cette expérience explicite, pas pour le pipeline par défaut.
+La valeur `gas` doit déjà être convertie et calibrée en **ppm** par le backend
+ou le firmware ; l’IA ne convertit pas l’ADC en ppm. Noms également acceptés :
+`timestamp`, `device_id`, `t`, `h`. Dates ISO ou secondes Unix, pas millisecondes.
+L’API doit renvoyer toutes les mesures de la période. Les enveloppes inconnues
+et une pagination annoncée par Link sont refusées ; une limitation silencieuse
+ne peut pas être détectée. Adapter le client à la pagination réelle si nécessaire.
+La route est documentée mais absente de l’actuel `app/main.py` de ce dépôt :
+la connexion réelle reste à vérifier avec l’équipe.
 
-Le diagnostic lit les résultats de `train.py` et vérifie leur correspondance
-avec le CSV. Il accepte les anciens rapports à 23 variables et les actuels
-à 13 variables. Sa catégorie récupération reste fixée à 300 s pour l’analyse
-historique. Les écarts aux plages d’apprentissage sont des indices descriptifs,
-pas une preuve des causes du verdict. Sortie : `reports/isolation_forest/diagnostic/`.
+```powershell
+$env:SENTINEL_API_URL = 'https://ADRESSE_A_RENSEIGNER'
+```
 
-## Tests du code
+Si nécessaire : `SENTINEL_API_TOKEN` (JWT), `SENTINEL_API_KEY`,
+`SENTINEL_CA_FILE` (CA locale). Aucun secret dans Git ; vérification TLS activée.
+
+Pour analyser une période déjà enregistrée :
+
+```powershell
+python ai/anomalies/detect.py --from 2026-10-08T08:00:00Z --to 2026-10-08T09:00:00Z --dev sx-001
+```
+
+Pour fonctionner en continu :
+
+```powershell
+python ai/anomalies/detect.py --watch --dev sx-001
+```
+
+Le modèle est chargé une seule fois. Toutes les 2 s, le script demande les
+180 dernières secondes à l’API, calcule les variables et émet les nouvelles
+prédictions. Au premier passage il émet uniquement la dernière prédiction par
+appareil ; ensuite il évite de répéter les mêmes horodatages. Des insertions
+tardives portant un horodatage plus ancien que le dernier émis sont ignorées.
+La durée de récupération de 180 s est une marge ; le modèle utilise toujours
+uniquement les 60 s précédant chaque mesure. Après une panne de plus de cette
+marge, le script ne rejoue pas automatiquement l’historique manqué.
+Arrêt : Ctrl+C. Une erreur API en mode continu est affichée puis réessayée.
+Une absence de mesures ou d’historique complet donne un état d’attente, pas
+un verdict normal. `--poll-seconds`, `--lookback-seconds`, `--endpoint`,
+`--model` et `--output` sont configurables.
+
+Les résultats sont affichés en JSON et écrits dans `reports/real_predictions.csv`.
+Le fichier est remplacé au premier résultat d’une nouvelle exécution, puis
+complété en mode continu. Pour conserver un enregistrement, choisir un autre
+`--output`. Format : `ts`, `dev`, `iforest`, `anomaly`, `class`, `proba`.
+`class` et `proba` restent null tant que Random Forest n’est pas implémenté.
+Le script n’écrit pas dans PostgreSQL et n’envoie pas encore les scores/alertes
+au backend : le contrat d’ingestion de ces sorties reste à définir avec l’équipe.
+
+## Variables et contrôles
+
+3 mesures actuelles + moyenne, écart-type et pente par capteur (9) + corrélation
+température/gaz (1). Fenêtre `[t-60 s,t]`, bornes incluses, sans données futures.
+Pentes en °C/s, %/s et ppm/s ; moyenne et écart-type du gaz en ppm.
+Les appareils sont séparés ; après un trou de plus de 15 s, une nouvelle minute
+est nécessaire. Les données ne sont pas nettoyées automatiquement : valeurs
+manquantes/non finies, doublons et concentrations négatives sont refusés.
+Les plages ADC ne sont pas appliquées. Les identifiants, dates, présence et
+étiquettes ne sont pas des variables d’entrée.
+`predict()` donne -1 pour anomalie, +1 pour normal ; `decision_function()` est
+négatif pour anomalie, et n’est pas une probabilité ni un score 0–1.
+Les anciens modèles sans métadonnée ppm sont refusés par `detect.py`.
+
+## Tests et GitHub
 
 ```powershell
 python -m unittest discover -s ai/anomalies/tests -t ai/anomalies -v
 ```
 
-`-t ai/anomalies` permet d’importer les modules. Les 7 tests couvrent le générateur,
-la préparation courte, les métriques, la récupération et le refus de lire le test
-final depuis l’apprentissage par sessions. Leur réussite ne prouve pas les
-performances sur les vrais capteurs.
-
-## GitHub
-
-Conserver le code, `experiments/`, `tests/`, les dépendances et ce README.
-Les sessions synthétiques, CSV préparés, modèles joblib, rapports, environnements
-et dossiers temporaires sont ignorés par `.gitignore` et régénérables.
-Le CSV historique reste dans le dépôt. Une règle d’ignore ne retire pas un
-fichier déjà suivi par Git.
-
-## Suite du travail
-
-Collecter plusieurs sessions normales réelles dans le boîtier final et annoter
-les incidents encadrés par l’équipe. Séparer apprentissage, validation et test
-avant les réglages. Entraîner un candidat distinct sur 60 s et confirmer ce choix.
-Ensuite implémenter la prédiction MQTT et la gestion des alertes, puis ajouter
-Random Forest lorsque les exemples étiquetés sont suffisants.
+Ces tests vérifient le contrat, la causalité, la génération, l’entraînement et
+la prédiction locale. Ils ne prouvent pas la connexion à l’API réelle ni les
+performances sur le matériel. Partager code, tests, dépendances et README ;
+garder CSV généré, modèles, rapports, environnements et secrets hors de Git.
+Le nouveau CSV synthétique et ses paramètres sont ignorés et régénérables.
