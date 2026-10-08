@@ -11,7 +11,7 @@ export const initialActuators: Actuators = {
   buzzAuto: false,
   buzzSeq: 0,
   leds: { green: 'auto', red: 'auto' },
-  auto: true,
+  auto: false,
 };
 
 export function actuatorReducer(s: Actuators, a: ActuatorAction): Actuators {

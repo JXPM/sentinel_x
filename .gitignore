@@ -34,3 +34,7 @@ docs/.obsidian/workspace*.json
 docs/.obsidian/cache
 docs/.trash/
 bar_saas_venv/
+
+# Mots de passe MQTT locaux (voir server/docker-compose.override.example.yml)
+server/docker-compose.override.yml
+*.log

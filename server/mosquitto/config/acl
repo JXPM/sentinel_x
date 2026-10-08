@@ -1,0 +1,15 @@
+user esp
+topic write sentinel/groupe1/edge01/telemetry
+topic write sentinel/groupe1/edge01/alert
+topic write sentinel/groupe1/edge01/status
+topic read  sentinel/groupe1/edge01/cmd
+topic read  sentinel/groupe1/edge01/config
+
+user vision
+topic write sentinel/groupe1/cam-01/alert
+topic read  sentinel/+/+/telemetry
+
+user api
+topic read  sentinel/#
+topic write sentinel/+/+/cmd
+topic write sentinel/+/+/config
