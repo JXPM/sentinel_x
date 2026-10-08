@@ -1,0 +1,11 @@
+# Exemple : copier en docker-compose.override.yml (non suivi par Git) et mettre les vrais mots de passe
+# (ceux créés avec mosquitto_passwd dans server/mosquitto/config/passwd).
+services:
+  api:
+    environment:
+      MQTT_USER: api
+      MQTT_PASS: "a-remplacer"
+  vision:
+    environment:
+      MQTT_USER: vision
+      MQTT_PASS: "a-remplacer"

@@ -1,5 +1,9 @@
 # Jalon 1 : HTTP sur :80 (publié en 8080). Jalon 2 : HTTPS 443 avec notre CA.
 :80 {
+	basic_auth {
+		sentinel $2a$14$tcJHxB8Oz7wP19MwqD2JN.lkkRlR7k4fVz6OPM0uz74P9vays8tcu
+	}
+
 	encode gzip
 
 	handle /api/* {

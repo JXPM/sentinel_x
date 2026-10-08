@@ -24,6 +24,8 @@ MQTT_HOST = os.getenv("MQTT_HOST", "mosquitto")        # nom du service dans doc
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "sentinel/#")
 API_SELF = os.getenv("API_SELF", "http://127.0.0.1:8000")
+MQTT_USER = os.getenv("MQTT_USER", "")
+MQTT_PASS = os.getenv("MQTT_PASS", "")
 MOTION_ALERT_GAP_S = 60       # au plus une alerte "intrusion" par minute (le PIR bat vite)
 
 _clients: set = set()
@@ -189,6 +191,8 @@ def _publish_config(cfg: dict) -> bool:
 def _start_mqtt() -> None:
     global _client
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="sentinel-api-bridge")
+    if MQTT_USER:
+        c.username_pw_set(MQTT_USER, MQTT_PASS)
     c.on_connect, c.on_disconnect, c.on_message = _on_connect, _on_disconnect, _on_message
     c.reconnect_delay_set(1, 30)
     c.connect_async(MQTT_HOST, MQTT_PORT, keepalive=30)

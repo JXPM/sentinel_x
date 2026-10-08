@@ -171,6 +171,8 @@ class Bus:
             log("[mqtt] paho-mqtt absent : alertes caméra désactivées (pip install paho-mqtt)")
             return
         c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="sentinel-vision-" + args.camera)
+        if getattr(args, "mqtt_user", ""):
+            c.username_pw_set(args.mqtt_user, args.mqtt_pass)
         c.on_connect = self._on_connect
         c.on_message = self._on_message
         c.reconnect_delay_set(1, 30)
@@ -444,6 +446,8 @@ def main():
     p.add_argument("--mqtt", default="localhost")
     p.add_argument("--mqtt-port", type=int, default=1883)
     p.add_argument("--topic", default="sentinel/groupe1/cam-01")
+    p.add_argument("--mqtt-user", default=__import__("os").environ.get("MQTT_USER", ""))
+    p.add_argument("--mqtt-pass", default=__import__("os").environ.get("MQTT_PASS", ""))
     p.add_argument("--no-mqtt", action="store_true")
     a = p.parse_args()
 
