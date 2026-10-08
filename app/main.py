@@ -4,6 +4,8 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
+from app import db
+
 app = FastAPI()
 
   
@@ -29,6 +31,9 @@ class Alert(BaseModel):
 # POST
 @app.post("/api/v1/alerts", status_code=201)
 def create_alert(alert: Alert):
+      stored = db.insert_alert(alert.model_dump())   # PostgreSQL si disponible
+      if stored:
+          return stored
       record = {
           "id": len(alerts) + 1,
           "ts": datetime.now(timezone.utc).isoformat(),
@@ -41,7 +46,8 @@ def create_alert(alert: Alert):
   # GET historique
 @app.get("/api/v1/alerts")
 def list_alerts(limit: int = 50):
-      return alerts[-limit:]
+      rows = db.list_alerts(limit)
+      return rows if rows is not None else alerts[-limit:]
 # --- Pont MQTT -> WebSocket vers le dashboard (boîtier ESP) ---
 from app.mqtt_bridge import setup as _setup_mqtt_bridge
 _setup_mqtt_bridge(app)

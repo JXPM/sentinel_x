@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /srv
 
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" "paho-mqtt>=2,<3"
+RUN pip install --no-cache-dir fastapi "uvicorn[standard]" "paho-mqtt>=2,<3" "psycopg[binary]>=3.2,<4"
 
 # Chemin relatif à la racine du dépôt (contexte de build = ..)
 COPY app ./app

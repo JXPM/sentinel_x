@@ -5,6 +5,10 @@ services:
     environment:
       MQTT_USER: api
       MQTT_PASS: "a-remplacer"
+      DATABASE_URL: "postgresql://sentinel:mot-de-passe-postgres@postgres:5432/sentinel"
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: "mot-de-passe-postgres"
   vision:
     environment:
       MQTT_USER: vision
