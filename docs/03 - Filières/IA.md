@@ -35,7 +35,7 @@ python detect.py --list-cameras             # Linux : noms des caméras
 python detect.py --source c270              # Linux : caméra choisie par son nom
 python detect.py --source 1                 # Windows : par numéro (pas de recherche par nom)
 ```
-Options utiles : `--no-show` (sans fenêtre), `--debug-objects` (meilleur score couteau/ciseaux/batte chaque seconde), `--obj-conf`, `--info-conf`, `--loiter`, `--abandon`, `--no-crop-pass`, `--port` (8081 par défaut, 0 = pas de flux), `--host` (127.0.0.1 par défaut ; 0.0.0.0 seulement si Caddy dans Docker doit joindre le flux). `SENTINEL_CAMERA` remplace `--source`, `SENTINEL_API_URL` et `SENTINEL_API_KEY` activent l'envoi des alertes.
+Options utiles : `--work-start`, `--work-end`, `--work-days` (heures ouvrées, 8 h 30-17 h lun-ven par défaut ; en dehors, toute alerte passe en `critical` avec `data.off_hours`, voir [[Idées et évolutions]]), `--no-show` (sans fenêtre), `--debug-objects` (meilleur score couteau/ciseaux/batte chaque seconde), `--obj-conf`, `--info-conf`, `--loiter`, `--abandon`, `--no-crop-pass`, `--port` (8081 par défaut, 0 = pas de flux), `--host` (127.0.0.1 par défaut ; 0.0.0.0 seulement si Caddy dans Docker doit joindre le flux). `SENTINEL_CAMERA` remplace `--source`, `SENTINEL_API_URL` et `SENTINEL_API_KEY` activent l'envoi des alertes.
 
 > [!warning] Numéro de caméra
 > Sous Linux, `/dev/videoN` change selon l'ordre de branchement : le 2026-10-06, la C270 était `/dev/video4` et `--source 1` ne s'ouvrait pas. D'où la recherche par nom. Sous Windows, vérifier le numéro le jour de la démo.
@@ -115,3 +115,10 @@ Anomalie = `IsolationForest` prédit −1 sur **N fenêtres consécutives** (hys
 - [ ] Features et justification
 - [ ] Modèles, hyperparamètres, métriques, matrice de confusion
 - [ ] Limites : dérive du MQ-2, taille réduite du jeu de données, chaleur du MQ-2 sur le DHT22, part de données synthétiques
+
+## ✅ Mise en production du moteur d'anomalies (8 octobre)
+- Code de l'équipe IA (`feat/ia/anomalies`) fusionné : 13 variables sur 60 s, Isolation Forest (200 arbres, contamination 0,01), entraînement sur un normal synthétique **en ppm**.
+- Le gaz arrive en ppm grâce au serveur ([[ADR-009 Gaz en ppm calibré côté serveur]]) ; route `GET /api/v1/telemetry`.
+- Service Docker `anomaly` (`ai/anomalies/service.py`) : interroge l'API toutes les 2 s, alerte après **3 fenêtres anormales consécutives**, une alerte par minute au plus.
+- Évaluation (jeu de test indépendant, données simulées) : 0 fausse alerte/h avec confirmation (7/h sans), pic de gaz détecté en 4 s, dérive lente en 24 s, surchauffe en 26 s.
+- [ ] **Réentraîner sur le vrai boîtier** : moyenne et écart-type de `gas_ppm`, température, humidité sur 15 min d'air propre → `docker compose build --build-arg GAS_PPM=… --build-arg GAS_NOISE_PPM=… anomaly`.

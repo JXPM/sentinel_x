@@ -16,3 +16,6 @@ tags: [soutenance, qr]
 | Que se passe-t-il si le serveur tombe ? | `restart: unless-stopped`, l'ESP affiche « SERVER LOST » et se reconnecte, vidéo de secours | [[Risques et plans B]] |
 | Qu'avez-vous subi pendant le pentest ? | Tentatives observées, ce qui a tenu, ce qu'on a corrigé | [[Pentest du jeudi]] |
 | Le DHT22 ne mesure-t-il pas la chaleur du MQ-2 ? | Capteurs éloignés, aération, base « normale » enregistrée dans le boîtier | [[Boîtier et thermique]] |
+| La caméra juge-t-elle les personnes ? | Non : elle décrit des faits (personne, objet dangereux, durée de présence, sac abandonné) ; un humain décide | [[IA]] |
+| Les seuils sont-ils codés en dur ? | Aujourd'hui en options de `detect.py` ; évolution : onglet « Règles » modifiable sans redémarrer. Les règles décident de la réaction, jamais de la détection IA | [[Idées et évolutions]] |
+| Pourquoi pas de reconnaissance faciale ? | Faisable techniquement, mais donnée biométrique (RGPD art. 9, CNIL très stricte au travail) : prévue seulement avec AIPD et consentement | [[Idées et évolutions]] |

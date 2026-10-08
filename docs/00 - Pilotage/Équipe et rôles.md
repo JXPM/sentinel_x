@@ -6,11 +6,12 @@ tags: [pilotage]
 
 | Membre | Filière | Briques possédées | Backup | Contact |
 |---|---|---|---|---|
-| Johan | IA | `ai/vision`, intégration vision → API, documentation IA | Oussama | |
+| Johan | IA | `ai/vision`, intégration vision → API et vision → dashboard, `dashboard/` (version actuelle), documentation | Oussama | |
 | Oussama | IA | `ai/anomalies` (données, features, modèles) | Johan | |
-| Anne | DEV | API (`app/`), dashboard | | |
+| Anne | DEV | API (`app/`), schéma `db/init.sql` | | |
+| Francky | DEV (à confirmer) | première version du dashboard (branche `dashboard`) | | |
 | | DEV | `firmware/` | | |
-| | INFRA | Laptop serveur Windows, Docker Compose, point d'accès, monitoring | | |
+| Mathis | INFRA | Serveur (son PC Windows : WSL2, Docker Engine, point d'accès, relais `portproxy`, usbipd), monitoring | Johan | |
 | | CYBER | PKI/TLS, durcissement, rapport d'audit, pentest | | |
 | | (au choix) | CAO Fusion360, laser, vidéo | | |
 

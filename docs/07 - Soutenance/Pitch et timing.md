@@ -17,7 +17,7 @@ tags: [soutenance, pitch]
 3. **Preuves** : TLS, durcissement, latence de vision mesurée, alerte prédictive en avance sur le seuil.
 4. **Différenciation** : fusion PIR + vision, prédiction du temps avant incident, stack visible.
 5. **Limites assumées** : PMF de l'ESP8266, taille du jeu de données.
-6. **Suite** : ESP32 (TLS plus confortable, PMF), plusieurs boîtiers, entraînement continu.
+6. **Suite** : ESP32 (TLS plus confortable, PMF), plusieurs boîtiers, entraînement continu, règles d'alerte réglables par l'entreprise, reconnaissance des employés **avec analyse RGPD** ([[Idées et évolutions]]).
 
 ## Finale nationale (17 novembre, Teams, 5 min)
 1 min de présentation, 1 min de vidéo, 3 min de **démo live uniquement**. Tester le partage d'écran Teams et la caméra filmant le boîtier **la veille**.

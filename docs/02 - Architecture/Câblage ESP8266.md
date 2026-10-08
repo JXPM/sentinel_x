@@ -1,29 +1,30 @@
 ---
 tags: [architecture, hardware, dev]
 ---
-# 🔧 Câblage ESP8266 (NodeMCU v2/v3)
+# 🔧 Câblage ESP8266 (NodeMCU, firmware 2.8.2)
 
-| Composant | Broche du composant | NodeMCU | GPIO | Remarque |
+> [!info] Source
+> Câblage réel du firmware `SentinelX.ino` v2.8.2 (constantes `PIN_*`), documenté par Mathis dans *Configuration de l'ESP — Sentinel-X* (branche `MathisTest`). Il remplace le plan initial (OLED, LED), qui n'a pas été retenu.
+
+| Composant | Signal → broche | GPIO | Alimentation | Remarque |
 |---|---|---|---|---|
-| OLED SSD1306 | SDA | D2 | 4 | I2C, adresse 0x3C, alimenté en 3,3 V |
-| OLED SSD1306 | SCL | D1 | 5 | |
-| DHT22 | DATA | D7 | 13 | Pull-up de 10 kΩ si module nu ; 3,3 V |
-| PIR HC-SR501 | OUT | D5 | 14 | Alimenté par **VIN (5 V)** ; sortie à 3,3 V, compatible |
-| MQ-2 | AO | **A0** via pont diviseur | ADC | ⚠️ AO peut monter à 5 V ; **diviseur 10 kΩ / 20 kΩ** → ≤ 3,3 V |
-| MQ-2 | VCC | VIN (5 V) | | La chauffe consomme environ 150 mA |
-| Buzzer actif | + | D6 | 12 | Via transistor NPN si le courant dépasse 12 mA |
-| LED rouge | anode | D8 | 15 | 220 Ω vers GND (D8 doit rester bas au boot, ce qui est compatible). Fixe = alerte, clignote = broker perdu |
-| LED verte | anode | D0 | 16 | 220 Ω vers GND. Fixe = connecté au broker MQTTS |
+| Écran LCD 16×2 (module I2C) | SDA → D2, SCL → D1 | 4, 5 | 5 V | adresse I2C détectée automatiquement (0x27 ou 0x3F) |
+| DHT22 (température, humidité) | OUT → D5 | 14 | 3,3 V | alerte « capteur absent » après 3 lectures ratées |
+| PIR HC-SR501 (présence) | OUT → D6 | 12 | 5 V | stabilisation 60 s après la mise sous tension |
+| Buzzer (passif) | S → D8 | 15 | 3,3 V | piloté par le firmware ; D8 reste bas au démarrage |
+| MQ-2 (fumée, gaz) | A0 → pont 10 kΩ / 20 kΩ → A0 | ADC | 5 V | chauffe 60 s avant d'exploiter la mesure |
+| — | D0, D3, D4, D7 | | | libres |
+
+Aucune LED d'état sur le boîtier : l'état (Wi-Fi, broker, alerte) s'affiche sur l'écran LCD.
 
 > [!warning] Broches à éviter
-> D3 (GPIO0), D4 (GPIO2) et D8 (GPIO15) déterminent le mode de démarrage. Rien qui tire D3 ou D4 vers le bas au boot.
+> D3 (GPIO0), D4 (GPIO2) et D8 (GPIO15) fixent le mode de démarrage : rien ne doit tirer D3 ou D4 vers le bas au boot. Le buzzer sur D8 est compatible (D8 reste bas).
 
-> [!tip] MQ-2
-> - Laisser chauffer **au moins quelques minutes** avant chaque mesure ; le premier préchauffage est long, on alimente le capteur dès le lundi.
-> - Le capteur chauffe lui-même : l'éloigner du DHT22.
+## Alimentation
+Par **USB** (micro-USB) ou power bank. L'alimentation de breadboard MB102 est trop faible pour les pics de courant du Wi-Fi et la chauffe du MQ-2.
 
-## Alimentation (option A)
-L'ESP est alimenté par **USB** (micro-USB du NodeMCU → laptop serveur ou chargeur 5 V). Il sort du boîtier avec le câble de la webcam, par un seul passe-câble ([[Boîtier et thermique]]).
+## MQ-2 et ppm
+Le firmware envoie la lecture brute `gas_raw` (0–1023) et `gas_ready` (capteur chaud). Le seuil local du boîtier est `GAS_ALERT_RAW = 600` (retour à la normale sous 500). La conversion en **ppm** est faite par le serveur ([[ADR-009 Gaz en ppm calibré côté serveur]]) : R0 = **5,157 kΩ**, environ 4 ppm dans l'air propre.
 
-## Schéma
-À réaliser sous **Fritzing** ou **Wokwi** pour le dossier PDF, et photographier la breadboard définitive.
+## Bibliothèques
+PubSubClient (MQTT), LiquidCrystal_I2C (LCD), DHT sensor library. Téléversement à 115200 bauds.

@@ -1,62 +1,24 @@
 ---
 tags: [sécurité, livrable]
 ---
-# 🔐 Matrice de sécurité (à intégrer au dossier PDF)
+# 🔐 Matrice de sécurité (état au 8 octobre, reprise dans le dossier PDF)
 
 | Actif | Menace | Mesure | Preuve | Statut |
 |---|---|---|---|---|
-| Lien ESP → broker | Écoute, MitM | **TLS 1.2**, CA locale, l'ESP vérifie le certificat serveur (`setTrustAnchors`) | Capture Wireshark | ☐ |
-| Broker MQTT | Accès anonyme, publication de fausses données | `allow_anonymous false`, mot de passe par client, **ACL par topic**, 1883 non publié | `mosquitto_sub` sans identifiants refusé | ☐ |
-| Broker MQTT | Saturation | `max_connections 20`, `message_size_limit 4096`, limite mémoire du conteneur | Config + `docker stats` | ☐ |
-| API | Injection d'alertes | `X-API-Key` sur `POST /alerts`, validation Pydantic | `curl` sans clé → 401 | ☐ |
-| Dashboard | Accès non autorisé | Login, JWT courte durée, HTTPS uniquement, HSTS | Capture | ☐ |
-| Dashboard | XSS via message d'alerte | Échappement Vue (pas de `v-html`), en-têtes de sécurité | Test avec une alerte contenant `<script>` | ☐ |
-| Hôte (SSH) | Brute force | **Clés uniquement**, `PermitRootLogin no`, `AllowUsers`, fail2ban, `ufw limit` | `sshd -T`, extrait de config | ☐ |
-| Hôte (réseau) | Exposition de services | **UFW deny par défaut**, ports Docker liés à 192.168.137.1, chaîne `DOCKER-USER` | `nmap` du laptop serveur | ☐ |
-| Wi-Fi | Accès au sous-réseau | WPA2-CCMP, phrase de passe ≥ 20 caractères, `ap_isolate=1`, pas de routage vers eth0 | Config hostapd | ☐ |
-| Conteneurs | Évasion, escalade | utilisateurs non-root, `cap_drop: ALL`, `no-new-privileges`, `read_only`, réseau `internal` | `docker-bench-security` | ☐ |
-| Secrets | Fuite via Git | `.env`, `secrets.h` et clés gitignorés ; `.env.example` factice | `git log -p` vérifié | ☐ |
-| Disponibilité | Panne ou plantage | `restart: unless-stopped`, healthchecks, SD clonée | — | ☐ |
+| Lien ESP → broker | Écoute, MitM | MQTTS 8883, TLS 1.2, CA du groupe **épinglée** dans le firmware (`setTrustAnchors`), heure NTP avant publication | Wireshark : clair avant, TLSv1.2 *Application Data* après | ✅ |
+| Broker MQTT | Accès anonyme, fausses données, commande du boîtier | `allow_anonymous false`, 3 comptes, **ACL par topic** | publication anonyme → `not authorised` | ✅ |
+| Broker MQTT | Saturation | `max_connections`, `message_size_limit`, quota mémoire du conteneur | config + `docker stats` | ☐ |
+| API | Accès direct en contournant le dashboard | API liée à `127.0.0.1`, joignable seulement par Caddy | `Test-NetConnection … -Port 8000` → `False` | ✅ |
+| API | Données malformées | validation Pydantic des schémas | requête invalide → 422 | ✅ |
+| Dashboard | Accès non autorisé | page de connexion, mot de passe **PBKDF2**, session **HMAC** en cookie `HttpOnly`, vérifiée par Caddy (`forward_auth`) | sans session : 302 `/login`, API et WebSocket → 401 | ✅ |
+| Dashboard | Mots de passe devinés | blocage après 5 échecs en 5 min par IP | 6e essai → 429 | ✅ |
+| Dashboard | Écoute du mot de passe | HTTPS 443, cookie `Secure`, HSTS | cadenas du navigateur | ☐ |
+| Dashboard | XSS via une alerte | échappement natif React | alerte contenant `<script>` | ✅ |
+| Base de données | Accès direct | aucun port publié, mot de passe hors Git | `docker compose ps` | ✅ |
+| Hôte | Exposition de services | `portproxy` limité à 2222/8080/8883, pare-feu limité à `192.168.137.0/24` | scan des ports depuis le Wi-Fi | ✅ |
+| Hôte (SSH) | Force brute | accès par clé | connexion par clé testée | ✅ |
+| Conteneurs | Élévation de privilèges | API et IA non-root ; `cap_drop: ALL`, `no-new-privileges` à généraliser | `docker-bench-security` | ◐ |
+| Secrets | Fuite par Git | `config.h`, `ca_cert.h`, `passwd`, `docker-compose.override.yml` hors Git, modèles factices fournis | historique Git | ✅ |
+| Présence du boîtier | Neutralisation discrète | Last Will `offline` publié par le broker | débrancher le boîtier → `offline` | ✅ |
 
-## Limites connues (à assumer devant le jury)
-- L'ESP8266 ne gère pas les **trames de management protégées (PMF/802.11w)** : une désauthentification Wi-Fi peut le déconnecter. On compense par une reconnexion automatique et un statut `offline` visible (LWT).
-- Pas d'authentification mutuelle par certificat client sur l'ESP (contrainte de RAM) : l'ESP s'authentifie par identifiant et mot de passe **à l'intérieur** du tunnel TLS.
-
----
-## Durcissement de l'hôte (`infra/hardening/`)
-### SSH : `/etc/ssh/sshd_config.d/sentinel.conf`
-```
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-PermitRootLogin no
-PubkeyAuthentication yes
-AllowUsers <utilisateur_admin>
-MaxAuthTries 3
-X11Forwarding no
-```
-
-> [!important] Option B (laptop Windows)
-> UFW, SSH, `DOCKER-USER` et `sshd` concernent un hôte Linux (option A). Sur le serveur Windows, l'équivalent est le **pare-feu Windows** avec des règles limitées à 192.168.137.0/24 ([[Serveur Windows (option B)]]). Compromis à écrire dans le dossier : le point d'accès Windows partage la connexion du laptop (NAT), le sous-réseau n'est donc pas étanche.
-
-### UFW (option A, pour mémoire)
-```bash
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw default deny routed
-sudo ufw allow in on wlan0 to any port 67 proto udp      # DHCP
-sudo ufw allow in on wlan0 to any port 53                # DNS
-sudo ufw allow in on wlan0 to any port 123 proto udp     # NTP
-sudo ufw allow in on wlan0 to 192.168.137.1 port 8883 proto tcp
-sudo ufw allow in on wlan0 to 192.168.137.1 port 443 proto tcp
-sudo ufw limit in on wlan0 to 192.168.137.1 port 22 proto tcp
-sudo ufw enable
-```
-
-### ⚠️ Docker contourne UFW
-Les ports publiés par Docker passent par la chaîne `FORWARD` (via DNAT) et **non par `INPUT`**, donc UFW ne les filtre pas. Deux protections :
-1. Lier chaque port à l'IP du point d'accès (`"192.168.137.1:443:443"`), comme dans [[Stack Docker Compose]].
-2. Ajouter dans `DOCKER-USER` une règle qui **refuse tout trafic arrivant par `eth0`** vers les conteneurs (script `infra/hardening/docker-user.sh`, ou l'outil `ufw-docker`).
-
-### Docker
-- L'utilisateur admin est dans le groupe `docker` **uniquement pour la semaine** ; on le documente comme compromis (le mode rootless est une amélioration possible).
-- `docker-bench-security` avant et après, avec les résultats dans le dossier.
+Failles et preuves détaillées : [[Failles, mesures et preuves]]. Décisions : [[ADR-008 Page de connexion et session]].

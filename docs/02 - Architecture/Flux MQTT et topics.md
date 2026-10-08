@@ -1,65 +1,54 @@
 ---
 tags: [architecture, mqtt, contrat]
 ---
-# 📡 Flux MQTT et topics (contrat entre DEV, IA et INFRA)
+# 📡 Flux MQTT et topics (contrat réel, firmware 2.8.2)
+
+> [!success] Écart du 7 octobre tranché
+> Le contrat suit le format du firmware et du pont MQTT de l'API : préfixe `sentinel/groupe1/<appareil>`. L'ancien contrat `sentinel/sx-001/…` est abandonné.
 
 ## Topics
-| Topic | Sens | QoS | Retain | Fréquence |
-|---|---|---|---|---|
-| `sentinel/sx-001/telemetry` | ESP → | 0 | non | toutes les 2 s |
-| `sentinel/sx-001/event` | ESP → | 1 | non | sur front montant ou descendant du PIR |
-| `sentinel/sx-001/status` | ESP → | 1 | **oui** | à la connexion, + LWT `offline` |
-| `sentinel/sx-001/cmd` | → ESP | 1 | non | à la demande |
-| `sentinel/ai/score` | anomaly → | 0 | non | toutes les 2 s |
+| Topic | Sens | QoS | Fréquence |
+|---|---|---|---|
+| `sentinel/groupe1/edge01/telemetry` | ESP → | 0 | toutes les 2 s |
+| `sentinel/groupe1/edge01/alert` | ESP → | 1 | sur événement (`raised` / `cleared`) |
+| `sentinel/groupe1/edge01/status` | ESP → | 1, retained | `online` à la connexion, Last Will `offline` |
+| `sentinel/groupe1/edge01/cmd` | API → ESP | 1 | à la demande |
+| `sentinel/groupe1/edge01/config` | API → ESP | 1, retained | réglages relus à chaque reconnexion |
+| `sentinel/groupe1/cam-01/alert` | vision → | 1 | sur détection |
 
 ## Payloads
 **telemetry**
 ```json
-{"ts":1791187200,"dev":"sx-001","t":23.4,"h":41.2,"gas":312,"pir":0,"rssi":-58,"heap":21400,"up":3600}
+{"device":"edge01","fw":"2.8.2","seq":1995,"temperature":24.9,"humidity":46.1,
+ "gas_raw":27,"gas_ready":true,"motion":false,"armed":true,"silenced":false,
+ "alerts":{"gas":false,"temperature":false,"motion":false,"sensor_fault":false,"remote":false},
+ "rssi":-42,"uptime":3991,"heap":15584}
 ```
-`gas` = valeur brute de A0 (0–1023), après le pont diviseur. `heap` = mémoire libre de l'ESP, affichée dans le dashboard (cela prouve qu'on surveille la RAM pendant le TLS).
+Le pont de l'API ajoute `gas_ppm` (conversion du MQ-2) et relaie au dashboard par WebSocket.
 
-**event**
-```json
-{"ts":1791187201,"dev":"sx-001","type":"motion","value":1}
-```
+**cmd** : `{"action":"buzzer","state":"on","duration_ms":2000}`, `{"action":"ack"}` (coupe le buzzer)
+**config** : `{"motion_buzzer":true}` (buzzer sur détection de mouvement)
 
-**status** (retained), avec un LWT identique à `"state":"offline"`
-```json
-{"dev":"sx-001","state":"online","ip":"192.168.137.23","fw":"1.0.0"}
+## Comptes et ACL (`server/mosquitto/config/acl`)
 ```
+user esp
+topic write sentinel/groupe1/edge01/telemetry
+topic write sentinel/groupe1/edge01/alert
+topic write sentinel/groupe1/edge01/status
+topic read  sentinel/groupe1/edge01/cmd
+topic read  sentinel/groupe1/edge01/config
 
-**cmd**
-```json
-{"target":"buzzer","action":"pulse","ms":1500}
-{"target":"led_red","action":"on"}
-{"target":"led_green","action":"off"}
-```
-`target` ∈ {`buzzer`, `led_red`, `led_green`} ; `action` ∈ {`on`, `off`, `pulse`}. L'ESP ignore toute valeur hors liste.
-
-**ai/score**
-```json
-{"ts":1791187202,"dev":"sx-001","iforest":-0.12,"anomaly":false,"class":"normal","p":0.93,"eta_critical_s":null}
-```
-
-## Comptes et ACL (`mosquitto/config/acl`)
-```
-user esp-sx001
-topic write sentinel/sx-001/telemetry
-topic write sentinel/sx-001/event
-topic write sentinel/sx-001/status
-topic read  sentinel/sx-001/cmd
+user vision
+topic write sentinel/groupe1/cam-01/alert
+topic read  sentinel/+/+/telemetry
 
 user api
 topic read  sentinel/#
-topic write sentinel/+/cmd
-
-user anomaly
-topic read  sentinel/+/telemetry
-topic write sentinel/ai/score
+topic write sentinel/+/+/cmd
+topic write sentinel/+/+/config
 ```
-Mots de passe : `mosquitto_passwd`, fichier gitignoré. L'ESP ne peut **ni lire les autres topics ni s'envoyer de commandes à lui-même**.
+Mots de passe : `server/mosquitto/config/passwd` (`mosquitto_passwd`), hors Git. Le boîtier ne peut ni lire les autres topics, ni s'envoyer de commandes.
 
-## Listeners Mosquitto
-- `8883` : TLS, **seul port publié** sur l'hôte, utilisé par l'ESP.
-- `1883` : **uniquement sur le réseau Docker interne**, jamais publié, authentification obligatoire. Utilisé par api et anomaly.
+## Listeners
+- **8883** : TLS (certificat signé par la CA du groupe), seul port MQTT publié sur le Wi-Fi.
+- **1883** : interne au réseau Docker (API, vision), **non publié**.

@@ -120,3 +120,15 @@ DASH_ADMIN_USER=superviseur
 DASH_ADMIN_PASS_HASH=change-me
 GF_SECURITY_ADMIN_PASSWORD=change-me
 ```
+
+## ✅ Services réels (`server/docker-compose.yml`, 8 octobre)
+| Service | Rôle | Ports publiés |
+|---|---|---|
+| `mosquitto` | broker, comptes + ACL, TLS | 8883 |
+| `api` | FastAPI, pont MQTT/WebSocket, auth, conversion ppm | `127.0.0.1:8000` |
+| `postgres` | alertes, télémétrie (brut + ppm), commandes | aucun |
+| `dashboard` | Caddy : page de connexion + build React, `forward_auth` | 8080 |
+| `vision` | YOLOv8n, webcam C270 via usbipd | aucun |
+| `anomaly` | Isolation Forest sur la télémétrie, alertes « anomalie » | aucun |
+
+Secrets (mots de passe MQTT et PostgreSQL, empreinte du mot de passe du dashboard, `SESSION_SECRET`, `MQ2_R0_KOHM`) : `server/docker-compose.override.yml`, hors Git ; modèle `docker-compose.override.example.yml`.

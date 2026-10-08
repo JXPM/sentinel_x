@@ -73,3 +73,6 @@ mosquitto_pub -h 192.168.137.1 -p 8883 --cafile pki/out/ca.crt -t test -m x   # 
 ## Rotation et hygiène
 - Les clés ne quittent jamais le laptop serveur ou le laptop CYBER ; `pki/out/` est gitignoré.
 - Après le workshop, on régénère la PKI avant la finale du 17 novembre.
+
+## ✅ État réel (8 octobre)
+CA `Sentinel-X CA` (auto-signée, interne) ; certificat serveur `CN=sentinel.local`, SAN IP `192.168.137.1` + DNS `sentinel.local`, `mosquitto`, `localhost`, clé EC P-256, ECDSA-SHA256, **validité 10 ans** (le plan initial prévoyait 90 jours). Fichiers dans `server/mosquitto/config/certs/` (hors Git). Côté boîtier : CA dans `ca_cert.h`, épinglée par `setTrustAnchors`. Voir [[Failles, mesures et preuves]].
