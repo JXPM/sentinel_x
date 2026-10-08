@@ -3,10 +3,6 @@
 # GET /api/v1/auth/check (forward_auth). Sans session : redirection vers /login pour
 # le navigateur, 401 pour les appels de l'API.
 :80 {
-	basic_auth {
-		sentinel $2a$14$tcJHxB8Oz7wP19MwqD2JN.lkkRlR7k4fVz6OPM0uz74P9vays8tcu
-	}
-
 	encode gzip
 
 	@html header Accept *text/html*
