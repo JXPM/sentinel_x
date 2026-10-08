@@ -27,6 +27,10 @@
 		route {
 			forward_auth api:8000 {
 				uri /api/v1/auth/check
+				# La vérification est une simple requête HTTP : sans ces en-têtes, l'ouverture
+				# du WebSocket /ws était transmise telle quelle et l'API répondait 403.
+				header_up -Upgrade
+				header_up -Connection
 				@denied status 401
 				handle_response @denied {
 					redir @html /login 302
