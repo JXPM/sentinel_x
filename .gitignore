@@ -47,3 +47,7 @@ ai/anomalies/reports/
 # Données synthétiques et préparation régénérables
 ai/anomalies/data/
 >>>>>>> origin/feat/ia/anomalies
+
+# firmware : secrets hors Git
+config.h
+ca_cert.h
