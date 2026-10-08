@@ -4,13 +4,15 @@ import numpy as np
 import pandas as pd
 
 SENSORS = ("temperature", "humidity", "gas")
-WINDOWS = (60, 300)
-FEATURE_COLUMNS = list(SENSORS) + [
+WINDOWS = (60,)
+DIAGNOSTIC_WINDOWS = (60, 300)
+ALL_FEATURE_COLUMNS = list(SENSORS) + [
     f"{sensor}_{stat}_{seconds}s"
-    for seconds in WINDOWS
+    for seconds in DIAGNOSTIC_WINDOWS
     for sensor in SENSORS
     for stat in ("mean", "std", "slope")
-] + [f"corr_temperature_gas_{seconds}s" for seconds in WINDOWS]
+] + [f"corr_temperature_gas_{seconds}s" for seconds in DIAGNOSTIC_WINDOWS]
+FEATURE_COLUMNS = [c for c in ALL_FEATURE_COLUMNS if c in SENSORS or c.endswith("_60s")]
 
 
 def validate_data(raw: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
@@ -61,22 +63,27 @@ def _slope(series: pd.Series) -> float:
     return float(np.dot(x, series.to_numpy() - series.mean()) / denominator) if denominator else np.nan
 
 
-def build_features(clean: pd.DataFrame, max_gap_seconds: float = 15) -> pd.DataFrame:
+def build_features(clean: pd.DataFrame, max_gap_seconds: float = 15, windows=WINDOWS) -> pd.DataFrame:
     """Utilise uniquement le présent/passé, par appareil et sans franchir une panne.
 
     Les fenêtres sont inclusives [t - durée, t]. Une histoire complète de
-    300 secondes est nécessaire. En direct, conserver cette histoire puis
+    max(windows) secondes est nécessaire (60 par défaut).
+    En direct, conserver cette histoire puis
     appeler cette même fonction ; la dernière ligne est la prédiction courante.
     """
     if max_gap_seconds <= 0:
         raise ValueError("max_gap_seconds doit être positif")
+    windows = tuple(windows)
+    if not windows or any(w not in DIAGNOSTIC_WINDOWS for w in windows) or len(set(windows)) != len(windows):
+        raise ValueError("windows doit être un sous-ensemble non vide de (60, 300)")
+    columns = [c for c in ALL_FEATURE_COLUMNS if c in SENSORS or any(c.endswith(f"_{w}s") for w in windows)]
     parts = []
     for _, device in clean.groupby("device_id", sort=False):
         device = device.sort_values("timestamp")
         segments = device["timestamp"].diff().dt.total_seconds().gt(max_gap_seconds).cumsum()
         for _, segment in device.groupby(segments):
             out = segment.set_index("timestamp").copy()
-            for seconds in WINDOWS:
+            for seconds in windows:
                 for sensor in SENSORS:
                     window = out[sensor].rolling(f"{seconds}s", closed="both", min_periods=2)
                     out[f"{sensor}_mean_{seconds}s"] = window.mean()
@@ -85,19 +92,21 @@ def build_features(clean: pd.DataFrame, max_gap_seconds: float = 15) -> pd.DataF
                 rolling = out["temperature"].rolling(f"{seconds}s", closed="both", min_periods=2)
                 out[f"corr_temperature_gas_{seconds}s"] = rolling.corr(out["gas"]).clip(-1, 1).fillna(0)
             # Corrélation 0 par convention lorsque l'un des signaux est constant.
-            ready = (out.index - out.index[0]).total_seconds() >= max(WINDOWS)
+            ready = (out.index - out.index[0]).total_seconds() >= max(windows)
             parts.append(out.loc[ready].reset_index())
     if not parts:
-        return pd.DataFrame(columns=[*clean.columns, *FEATURE_COLUMNS[3:]])
-    return pd.concat(parts, ignore_index=True).replace([np.inf, -np.inf], np.nan).dropna(subset=FEATURE_COLUMNS)
+        return pd.DataFrame(columns=[*clean.columns, *columns[3:]])
+    return pd.concat(parts, ignore_index=True).replace([np.inf, -np.inf], np.nan).dropna(subset=columns)
 
 
-def chronological_split(features: pd.DataFrame, cutoff: pd.Timestamp) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Embargo de 300 s : aucune mesure d'une fenêtre train ne rejoint une fenêtre test."""
+def chronological_split(features: pd.DataFrame, cutoff: pd.Timestamp, embargo_seconds: int = 60) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Embargo de 60 s par défaut ; 300 s pour les comparaisons historiques."""
+    if embargo_seconds < 60:
+        raise ValueError("L'embargo doit couvrir au moins la fenêtre de 60 s")
     cutoff = pd.Timestamp(cutoff)
     if cutoff.tzinfo is None:
         raise ValueError("La date de séparation doit inclure un fuseau horaire")
-    end_gap = cutoff + pd.Timedelta(seconds=max(WINDOWS))
+    end_gap = cutoff + pd.Timedelta(seconds=embargo_seconds)
     train = features.loc[features.timestamp < cutoff].copy()
     gap = features.loc[(features.timestamp >= cutoff) & (features.timestamp < end_gap)].copy()
     evaluation = features.loc[features.timestamp >= end_gap].copy()

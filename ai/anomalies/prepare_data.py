@@ -29,7 +29,7 @@ def main():
     report.update({"feature_columns": FEATURE_COLUMNS, "feature_count": len(FEATURE_COLUMNS),
                    "feature_rows": len(features), "warmup_or_incomplete_rows": len(clean) - len(features),
                    "train_rows": len(train), "evaluation_rows": len(evaluation), "gap_rows": len(gap),
-                   "cutoff": args.cutoff, "embargo_seconds": 300})
+                   "cutoff": args.cutoff, "embargo_seconds": 60})
     args.output.mkdir(parents=True, exist_ok=True)
     for name, frame in (("clean", clean), ("train", train), ("evaluation", evaluation)):
         frame.to_csv(args.output / f"{name}.csv", index=False)

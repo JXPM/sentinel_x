@@ -124,10 +124,11 @@ def main():
     metrics = evaluate(predictions)
     metrics.update({"train_rows": len(train), "gap_rows": len(gap), "feature_count": len(FEATURE_COLUMNS),
                     "contamination": args.contamination, "n_estimators": 200, "random_state": 42,
-                    "cutoff": args.cutoff, "reload_verified": True, "quality": quality,
+                    "cutoff": args.cutoff, "windows_seconds": list(WINDOWS), "embargo_seconds": 60,
+                    "reload_verified": True, "quality": quality,
                     "limitations": ["Données synthétiques, deux épisodes seulement",
                                     "Métriques par mesure, fenêtres temporelles dépendantes",
-                                    "Retours au normal encore affectés par 300 s d'historique",
+                                    "Retours au normal encore affectés par 60 s d'historique",
                                     "Délai mesuré depuis le début étiqueté dans l'évaluation",
                                     "Prédictions brutes sans confirmation temporelle ni cooldown"]})
     args.report_dir.mkdir(parents=True, exist_ok=True)

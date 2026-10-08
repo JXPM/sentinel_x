@@ -1,13 +1,27 @@
-"""Tests des métriques : python -m unittest discover -s ai/anomalies -p test_train.py."""
+"""Tests des métriques, découverts dans le dossier tests/."""
 
 import unittest
 
 import pandas as pd
 
 from train import evaluate
+from experiments.compare_windows import recovery_metrics
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_recovery_requires_sixty_seconds_and_resets_on_anomaly(self):
+        data = pd.DataFrame({
+            "device_id": ["a"] * 17,
+            "timestamp": pd.date_range("2026-10-05", periods=17, freq="5s", tz="UTC"),
+            "expected_scenario": ["drift"] + ["normal"] * 16,
+            "anomaly": [True, False, False, True] + [False] * 13,
+        })
+        result = recovery_metrics(data)[0]
+        self.assertEqual(result["stable_normal_start_delay_s"], 20)
+        self.assertEqual(result["stable_normal_confirmation_delay_s"], 80)
+        result = recovery_metrics(data.iloc[:10])[0]
+        self.assertIsNone(result["stable_normal_start_delay_s"])
+
     def test_false_positives_delays_and_missed_episode(self):
         data = pd.DataFrame({
             "device_id": ["a"] * 7,
