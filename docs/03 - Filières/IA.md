@@ -115,3 +115,10 @@ Anomalie = `IsolationForest` prédit −1 sur **N fenêtres consécutives** (hys
 - [ ] Features et justification
 - [ ] Modèles, hyperparamètres, métriques, matrice de confusion
 - [ ] Limites : dérive du MQ-2, taille réduite du jeu de données, chaleur du MQ-2 sur le DHT22, part de données synthétiques
+
+## ✅ Mise en production du moteur d'anomalies (8 octobre)
+- Code de l'équipe IA (`feat/ia/anomalies`) fusionné : 13 variables sur 60 s, Isolation Forest (200 arbres, contamination 0,01), entraînement sur un normal synthétique **en ppm**.
+- Le gaz arrive en ppm grâce au serveur ([[ADR-009 Gaz en ppm calibré côté serveur]]) ; route `GET /api/v1/telemetry`.
+- Service Docker `anomaly` (`ai/anomalies/service.py`) : interroge l'API toutes les 2 s, alerte après **3 fenêtres anormales consécutives**, une alerte par minute au plus.
+- Évaluation (jeu de test indépendant, données simulées) : 0 fausse alerte/h avec confirmation (7/h sans), pic de gaz détecté en 4 s, dérive lente en 24 s, surchauffe en 26 s.
+- [ ] **Réentraîner sur le vrai boîtier** : moyenne et écart-type de `gas_ppm`, température, humidité sur 15 min d'air propre → `docker compose build --build-arg GAS_PPM=… --build-arg GAS_NOISE_PPM=… anomaly`.

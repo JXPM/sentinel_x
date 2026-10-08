@@ -25,12 +25,14 @@ Pas de serveur DNS local : on utilise l'IP `192.168.137.1` partout (firmware, ce
 ## NTP pour l'ESP (indispensable à la validation TLS)
 Le service de temps Windows (`w32time`) est activé en serveur NTP sur le laptop ; l'ESP appelle `configTime(0, 0, "192.168.137.1")`. Commandes dans [[Serveur Windows (option B)]].
 
-## Ports ouverts sur le laptop serveur, et rien d'autre
-| Port | Service | Autorisé depuis |
+## Ports exposés au Wi-Fi (état au 8 octobre)
+| Port | Service | État |
 |---|---|---|
-| 8883/tcp | Mosquitto (TLS) | 192.168.137.0/24 |
-| 443/tcp | Caddy (dashboard, API, Grafana) | 192.168.137.0/24 |
-| 123/udp | NTP (w32time) | 192.168.137.0/24 |
-| 1883/tcp, 8000/tcp | **Jalon 1 uniquement** (tests sans TLS) | 192.168.137.0/24, **à fermer avant jeudi** |
+| 8883/tcp | Mosquitto TLS, comptes + ACL | ✅ ouvert |
+| 8080/tcp | Caddy : page de connexion, dashboard, `/api`, `/ws`, `/video` | ✅ ouvert (session obligatoire) |
+| 2222/tcp | SSH vers WSL (par clé) | ✅ ouvert |
+| 1883/tcp | MQTT en clair | ❌ fermé (interne Docker) |
+| 8000/tcp | API directe | ❌ fermé (liée à `127.0.0.1`) |
+| 443/tcp | HTTPS | ❌ fermé (à mettre en place) |
 
-Règles du pare-feu Windows : voir [[Serveur Windows (option B)]].
+Les redirections `portproxy` de 1883, 8000 et 443 ont été supprimées (PowerShell administrateur) ; les règles du pare-feu Windows sont limitées à `192.168.137.0/24`. Détail et preuves : [[Failles, mesures et preuves]].

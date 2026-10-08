@@ -62,3 +62,18 @@ Servi directement par le script de vision sur `:8081`, relayé par Vite en dev e
  "abandoned": false, "abandoned_s": 0.0, "infer_ms": 29.8, "total_ms": 31.4, "fps": 31.8}
 ```
 Les alertes vision envoyées à `POST /api/v1/alerts` portent `data.reason` (`presence`, `loitering`, `danger_object`, `abandoned_object`) et `data.objects`.
+
+## ✅ Routes réelles (8 octobre)
+| Route | Rôle |
+|---|---|
+| `POST /api/v1/auth/login` · `POST /api/v1/auth/logout` | connexion au dashboard (cookie de session) |
+| `GET /api/v1/auth/check` · `GET /api/v1/auth/me` | vérification de session (Caddy `forward_auth`), utilisateur courant |
+| `POST /api/v1/alerts` · `GET /api/v1/alerts` | alertes (PostgreSQL, repli en mémoire) |
+| `PATCH /api/v1/alerts/{id}/ack` | acquittement : coupe le buzzer, renseigne `acked_at` |
+| `POST /api/v1/commands` | buzzer, « buzzer sur détection » (journalisé dans `commands`) |
+| `GET /api/v1/telemetry?from=&to=&dev=` | mesures d'une période, gaz en ppm (service IA) |
+| `GET /api/v1/mq2/calibration` | calcule R0 du MQ-2 sur les dernières mesures |
+| `GET /api/v1/bridge` | état du pont MQTT, du boîtier, de la base, nombre de WebSockets |
+| `WS /ws` | télémétrie, état et alertes en direct vers le dashboard |
+
+Toutes les routes passent par Caddy et exigent une session, sauf `/api/v1/auth/*` ([[ADR-008 Page de connexion et session]]).
