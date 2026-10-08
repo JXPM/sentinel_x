@@ -247,6 +247,7 @@ function apiReducer(s: ApiState, a: ApiAction): ApiState {
           temp: num(d.temperature) ?? prev?.temp ?? 0,
           hum: num(d.humidity) ?? prev?.hum ?? 0,
           gas: num(d.gas) ?? prev?.gas ?? 0,
+          gasUnit: d.gas_unit === 'ppm' ? 'ppm' : 'raw',
           score: prev?.score ?? 0,
           presence: Boolean(d.presence ?? d.pir),
         };
