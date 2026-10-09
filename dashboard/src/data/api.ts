@@ -1,5 +1,5 @@
 // Client de l'API Sentinel-X. Contrat : docs/02 - Architecture/API REST et WebSocket.md
-import type { Alert, AlertSource, AlertType, Command, Severity } from '../types';
+import type { Alert, AlertSource, AlertType, Command, Settings, SettingsResponse, Severity } from '../types';
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ?? '';
 
@@ -45,7 +45,24 @@ export const ackAlert = (id: number) =>
   request<void>(`/api/v1/alerts/${id}/ack`, { method: 'PATCH', headers: headers() });
 
 export const sendCommand = (cmd: Command) =>
-  request<void>('/api/v1/commands', { method: 'POST', headers: headers(true), body: JSON.stringify(cmd) });
+  request<{ sent: boolean }>('/api/v1/commands', { method: 'POST', headers: headers(true), body: JSON.stringify(cmd) });
+
+export const fetchSettings = () => request<SettingsResponse>('/api/v1/settings', { headers: headers() });
+
+/** Erreur 422 de FastAPI → message lisible (« vision.loiter_s : … ») */
+export async function saveSettings(s: Settings): Promise<SettingsResponse> {
+  const res = await fetch(BASE + '/api/v1/settings', { method: 'PUT', headers: headers(true), body: JSON.stringify(s) });
+  if (res.ok) return (await res.json()) as SettingsResponse;
+  let detail = 'erreur ' + res.status;
+  try {
+    const body = (await res.json()) as { detail?: { loc: (string | number)[]; msg: string }[] | string };
+    if (Array.isArray(body.detail)) detail = body.detail.map((d) => d.loc.slice(1).join('.') + ' : ' + d.msg).join(' · ');
+    else if (body.detail) detail = body.detail;
+  } catch {
+    // corps illisible : on garde le code HTTP
+  }
+  throw new Error(detail);
+}
 
 export const videoUrl = () => BASE + '/video';
 
@@ -70,6 +87,7 @@ export interface VisionStatus {
   abandoned_s?: number;
   present_s?: number;
   loitering?: boolean;
+  off_hours?: boolean;
   infer_ms: number;
   total_ms: number;
   fps: number;

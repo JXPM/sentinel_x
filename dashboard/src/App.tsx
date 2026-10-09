@@ -3,6 +3,7 @@ import { AiAnalysis } from './components/AiAnalysis';
 import { AlertsPage } from './components/AlertsPage';
 import { CommandsPanel } from './components/CommandsPanel';
 import { OverviewSide } from './components/OverviewSide';
+import { RulesPage } from './components/RulesPage';
 import { ScenarioBar } from './components/ScenarioBar';
 import { SensorTiles } from './components/SensorTiles';
 import { Sidebar } from './components/Sidebar';
@@ -63,6 +64,7 @@ export default function App() {
         {tab === 'capteurs' && <TrendCharts s={s} />}
         {tab === 'alertes' && <AlertsPage s={s} />}
         {tab === 'commandes' && <CommandsPanel s={s} />}
+        {tab === 'regles' && <RulesPage s={s} />}
         {tab === 'systeme' && <SystemPanel s={s} />}
       </main>
     </div>

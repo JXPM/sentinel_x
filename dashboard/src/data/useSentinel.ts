@@ -124,6 +124,7 @@ function useMockSource(): Sentinel {
     threat: false,
     presentSecs: person ? s.since * SIM_SECS_PER_SAMPLE : 0,
     loitering: false,
+    offHours: false,
     frame: [640, 480],
     camera: null,
   };
@@ -156,6 +157,7 @@ function useMockSource(): Sentinel {
     buzz: () => dispatch({ type: 'buzz', auto: false }),
     setLed: (led, mode) => dispatch({ type: 'led', led, mode }),
     toggleAuto: () => dispatch({ type: 'toggleAuto' }),
+    sendLcd: () => Promise.resolve(true),
     commandError: null,
     aiClass: null,
     demo: {
@@ -287,6 +289,19 @@ const ALERT_TITLE: Record<string, [string, string]> = {
   device_offline: ['Boîtier instable', 'Boîtier hors ligne'],
 };
 
+// Titre du bandeau selon la raison précise portée par l'alerte (data.reason, data.off_hours)
+const REASON_TITLE: Record<string, string> = {
+  danger_object: 'Objet dangereux détecté',
+  loitering: 'Présence prolongée',
+  abandoned: 'Objet abandonné',
+};
+const alertTitle = (a: Alert, crit: boolean): string => {
+  const reason = typeof a.data?.reason === 'string' ? a.data.reason : '';
+  if (REASON_TITLE[reason]) return REASON_TITLE[reason];
+  if (a.data?.off_hours === true && a.type === 'intrusion' && a.source !== 'fusion') return 'Présence hors horaires';
+  return ALERT_TITLE[a.type]?.[crit ? 1 : 0] ?? 'Alerte';
+};
+
 const OBJECT_LABEL: Record<string, string> = {
   knife: 'couteau', scissors: 'ciseaux', 'baseball bat': 'batte',
   'cell phone': 'téléphone', backpack: 'sac à dos', handbag: 'sac à main', suitcase: 'valise', laptop: 'ordinateur',
@@ -300,7 +315,7 @@ function apiBanner(alerts: Alert[], device: Device | null, vision: VisionState, 
   const crit = open.find((a) => a.severity === 'critical');
   const banner = (a: Alert): Banner => {
     const lvl: Level = SEVERITY_LEVEL[a.severity];
-    const title = ALERT_TITLE[a.type]?.[lvl === 'crit' ? 1 : 0] ?? 'Alerte';
+    const title = alertTitle(a, lvl === 'crit');
     return { level: lvl, kicker: lvl === 'crit' ? 'CRITIQUE' : 'ATTENTION', title, sub: a.message };
   };
   // Ce que la caméra voit en ce moment passe en premier : visible même sans l'API
@@ -309,6 +324,12 @@ function apiBanner(alerts: Alert[], device: Device | null, vision: VisionState, 
     return {
       level: 'crit', kicker: 'CRITIQUE · CAMÉRA', title: 'Objet dangereux détecté',
       sub: 'cam-01 : ' + objectLabel(top.label) + ' tenu par une personne, confiance ' + fr(top.conf, 2) + '.',
+    };
+  }
+  if (vision.offHours && vision.person && vision.confirmFrames >= vision.confirmNeeded) {
+    return {
+      level: 'crit', kicker: 'CRITIQUE · HORS HORAIRES', title: 'Présence hors horaires',
+      sub: 'cam-01 : personne détectée en dehors des heures ouvrées, confiance ' + fr(vision.conf, 2) + '.',
     };
   }
   if (crit) return banner(crit);
@@ -350,7 +371,7 @@ function apiVision(st: VisionStatus | null): VisionState {
     return {
       online: false, person: false, conf: 0, ms: null, fps: null, confirmFrames: 0, confirmNeeded: 3, bbox: null,
       objects: [], infoObjects: [], abandoned: false, abandonedSecs: 0,
-      threat: false, presentSecs: 0, loitering: false, frame: [640, 480], camera: null,
+      threat: false, presentSecs: 0, loitering: false, offHours: false, frame: [640, 480], camera: null,
     };
   }
   return {
@@ -369,6 +390,7 @@ function apiVision(st: VisionStatus | null): VisionState {
     threat: Boolean(st.threat),
     presentSecs: st.present_s ?? 0,
     loitering: Boolean(st.loitering),
+    offHours: Boolean(st.off_hours),
     frame: [st.width, st.height],
     camera: st.camera,
   };
@@ -483,6 +505,16 @@ function useApiSource(): Sentinel {
       dispatch({ type: 'toggleAuto' });
       send({ target: 'auto', action: s.act.auto ? 'off' : 'on' });
     },
+    sendLcd: (text, secs) =>
+      sendCommand({ target: 'lcd', action: 'text', text, s: secs })
+        .then((r) => {
+          dispatch({ type: 'error', message: r.sent ? null : 'Texte non transmis : broker MQTT injoignable' });
+          return r.sent;
+        })
+        .catch((e: Error) => {
+          dispatch({ type: 'error', message: 'Texte non transmis : ' + e.message });
+          return false;
+        }),
     commandError: s.commandError,
     aiClass: s.aiClass,
     demo: null,

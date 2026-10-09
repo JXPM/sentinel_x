@@ -6,7 +6,7 @@ from datetime import timedelta
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app import auth, db, mq2
+from app import auth, db, mq2, mqtt_bridge, rules, settings
 
 app = FastAPI()
 
@@ -33,16 +33,15 @@ class Alert(BaseModel):
 # POST
 @app.post("/api/v1/alerts", status_code=201)
 def create_alert(alert: Alert):
-      stored = db.insert_alert(alert.model_dump())   # PostgreSQL si disponible
-      if stored:
-          return stored
-      record = {
-          "id": len(alerts) + 1,
-          "ts": datetime.now(timezone.utc).isoformat(),
-          **alert.model_dump(),
-      }
-      alerts.append(record)
-      return {"id": record["id"], "ts": record["ts"]}
+      a = alert.model_dump()
+      stored = db.insert_alert(a)   # PostgreSQL si disponible
+      if not stored:
+          record = {"id": len(alerts) + 1, "ts": datetime.now(timezone.utc).isoformat(), **a}
+          alerts.append(record)
+          stored = {"id": record["id"], "ts": record["ts"]}
+      # Réaction automatique du boîtier (onglet « Règles » du dashboard)
+      fired = rules.on_alert(a, mqtt_bridge.publish_cmd)
+      return {**stored, "rules": fired} if fired else stored
 
 
   # GET historique
@@ -73,7 +72,7 @@ def mq2_calibration(dev: str | None = None, seconds: int = 120):
               "note": "Mettre MQ2_R0_KOHM dans docker-compose.override.yml (service api) puis redémarrer l'API."}
 
 
-# --- Pont MQTT -> WebSocket vers le dashboard (boîtier ESP) ---
-from app.mqtt_bridge import setup as _setup_mqtt_bridge
+# --- Connexion, réglages, pont MQTT -> WebSocket vers le dashboard (boîtier ESP) ---
 auth.setup(app)
-_setup_mqtt_bridge(app)
+settings.setup(app, mqtt_bridge.publish_vision_config)
+mqtt_bridge.setup(app)

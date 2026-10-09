@@ -8,6 +8,7 @@ topic read  sentinel/groupe1/edge01/config
 user vision
 topic write sentinel/groupe1/cam-01/alert
 topic read  sentinel/+/+/telemetry
+topic read  sentinel/groupe1/cam-01/config
 
 user api
 topic read  sentinel/#

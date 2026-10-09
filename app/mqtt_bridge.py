@@ -4,7 +4,9 @@
 - relaie la télémétrie, l'état et les alertes du boîtier sur /ws, au format attendu par le dashboard
   ({"kind": "telemetry" | "status" | "alert", "data": {...}}) ;
 - enregistre les alertes du boîtier via POST /api/v1/alerts ;
-- transmet au boîtier les commandes du dashboard (POST /api/v1/commands, PATCH /api/v1/alerts/{id}/ack) ;
+- transmet au boîtier les commandes du dashboard (POST /api/v1/commands, PATCH /api/v1/alerts/{id}/ack)
+  et celles des règles automatiques (app/rules.py) ;
+- publie les seuils de la vision en message retenu (sentinel/groupe1/cam-01/config, app/settings.py) ;
 - enregistre télémétrie, acquittements et commandes dans PostgreSQL quand la base est disponible (app/db.py).
 """
 import asyncio
@@ -15,11 +17,13 @@ import threading
 import time
 import urllib.request
 from datetime import datetime, timezone
+from typing import Literal
 
 import paho.mqtt.client as mqtt
-from fastapi import Response, WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
-from app import db, mq2
+from app import auth, db, mq2, settings
 
 log = logging.getLogger("uvicorn.error")
 
@@ -30,6 +34,8 @@ API_SELF = os.getenv("API_SELF", "http://127.0.0.1:8000")
 MQTT_USER = os.getenv("MQTT_USER", "")
 MQTT_PASS = os.getenv("MQTT_PASS", "")
 MOTION_ALERT_GAP_S = 60       # au plus une alerte "intrusion" par minute (le PIR bat vite)
+DEVICE_BASE = os.getenv("DEVICE_BASE", "sentinel/groupe1/edge01")
+VISION_BASE = os.getenv("VISION_BASE", "sentinel/groupe1/cam-01")
 
 _clients: set = set()
 _loop = None
@@ -125,10 +131,15 @@ def _alert(dev: str, d: dict) -> None:
             return
         _motion_last = time.time()
     api_type, severity, text = _ALERTS[kind]
+    message = text.format(value=d.get("value", "?"), threshold=d.get("threshold", "?"))
+    data = {k: d[k] for k in ("type", "value", "threshold", "armed") if k in d}
+    if kind == "motion":
+        data["reason"] = "motion"
+        if settings.off_hours():          # présence hors des heures ouvrées : plus suspecte
+            severity, message, data["off_hours"] = "critical", "Hors horaires : " + message, True
     alert = {
         "source": "device", "type": api_type, "severity": severity, "dev": str(dev)[:32],
-        "message": text.format(value=d.get("value", "?"), threshold=d.get("threshold", "?"))[:200],
-        "data": {k: d[k] for k in ("type", "value", "threshold", "armed") if k in d},
+        "message": message[:200], "data": data,
     }
     threading.Thread(target=_store_alert, args=(alert,), daemon=True).start()
 
@@ -141,6 +152,7 @@ def _on_connect(client, userdata, flags, reason_code, properties=None):
     _mqtt_ok = True
     client.subscribe(MQTT_TOPIC, qos=1)
     log.info("[pont] connecté à %s:%s, abonné à %s", MQTT_HOST, MQTT_PORT, MQTT_TOPIC)
+    threading.Thread(target=_sync_vision_config, daemon=True).start()
     _broadcast({"kind": "status", "data": _status()})
 
 
@@ -178,14 +190,30 @@ def _on_message(client, userdata, msg):
         log.warning("[pont] message illisible sur %s : %s", msg.topic, e)
 
 
-def _publish_cmd(cmd: dict) -> bool:
-    if not (_client and _mqtt_ok and _device_base):
+def publish_cmd(cmd: dict) -> bool:
+    """Commande au boîtier (dashboard ou règle automatique)."""
+    if not (_client and _mqtt_ok):
         return False
-    _client.publish(_device_base + "/cmd", json.dumps(cmd), qos=1)
+    _client.publish((_device_base or DEVICE_BASE) + "/cmd", json.dumps(cmd), qos=1)
     return True
 
 
-DEVICE_BASE = os.getenv("DEVICE_BASE", "sentinel/groupe1/edge01")
+def publish_vision_config(cfg: dict) -> bool:
+    """Seuils et heures ouvrées de la vision, en message retenu : detect.py les reçoit à chaque (re)connexion."""
+    if not (_client and _mqtt_ok):
+        return False
+    _client.publish(VISION_BASE + "/config", json.dumps(cfg), qos=1, retain=True)
+    return True
+
+
+def _sync_vision_config() -> None:
+    """Au démarrage : republie les réglages enregistrés, une fois la base lue.
+    Sans base, on ne publie rien, pour ne pas écraser le message retenu par les valeurs par défaut."""
+    for _ in range(30):
+        if settings.loaded() or settings.load():
+            publish_vision_config(settings.vision_config())
+            return
+        time.sleep(10)
 
 
 def _publish_config(cfg: dict) -> bool:
@@ -195,6 +223,15 @@ def _publish_config(cfg: dict) -> bool:
     _client.publish((_device_base or DEVICE_BASE) + "/config", json.dumps(cfg), qos=1, retain=True)
     log.info("[pont] réglage envoyé au boîtier : %s", cfg)
     return True
+
+
+class Command(BaseModel):
+    """Commande du dashboard : bornes vérifiées ici, et de nouveau par le firmware."""
+    target: Literal["buzzer", "auto", "lcd", "led_red", "led_green"]
+    action: Literal["on", "off", "auto", "pulse", "text"] | None = None
+    ms: int = Field(2000, ge=100, le=10_000)          # durée du buzzer
+    text: str | None = Field(None, max_length=64)     # texte LCD, ramené à 32 caractères ASCII
+    s: int = Field(5, ge=1, le=30)                    # durée d'affichage du texte
 
 
 def _start_mqtt() -> None:
@@ -235,21 +272,27 @@ def setup(app) -> None:
             _clients.discard(ws)
 
     @app.post("/api/v1/commands", status_code=202)
-    async def commands(cmd: dict):
-        target, action = cmd.get("target"), cmd.get("action")
+    async def commands(cmd: Command, request: Request):
+        user = auth.session_user(request) or "dashboard"
+        target, action, detail = cmd.target, cmd.action, None
         if target == "buzzer":
-            sent = _publish_cmd({"action": "buzzer", "state": "on", "duration_ms": int(cmd.get("ms") or 2000)})
+            sent = publish_cmd({"action": "buzzer", "state": "on", "duration_ms": cmd.ms})
         elif target == "auto":              # bouton « Buzzer sur détection »
             sent = _publish_config({"motion_buzzer": action == "on"})
+        elif target == "lcd":               # texte affiché quelques secondes sur l'écran du boîtier
+            detail = settings.lcd_text(cmd.text or "")
+            if not detail:
+                raise HTTPException(422, "Texte vide ou sans caractère affichable par l'écran")
+            sent = publish_cmd({"action": "lcd", "text": detail, "duration_s": cmd.s})
         else:
             sent = False                      # LEDs : pas gérées par ce boîtier
         if sent:
-            await asyncio.to_thread(db.log_command, target, action or "pulse")
-        return {"sent": sent, "target": target, "action": action}
+            await asyncio.to_thread(db.log_command, target, action or "pulse", user, detail)
+        return {"sent": sent, "target": target, "action": action, "text": detail}
 
     @app.patch("/api/v1/alerts/{alert_id}/ack", status_code=204)
     async def ack(alert_id: int):
-        _publish_cmd({"action": "ack"})       # le boîtier coupe son buzzer
+        publish_cmd({"action": "ack"})        # le boîtier coupe son buzzer
         await asyncio.to_thread(db.ack_alert, alert_id)
         return Response(status_code=204)
 

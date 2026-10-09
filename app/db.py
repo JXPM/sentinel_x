@@ -14,6 +14,7 @@ try:
     from psycopg.types.json import Json
 except ImportError:          # image sans pilote : mode mémoire
     psycopg = None
+    Json = dict
 
 log = logging.getLogger("uvicorn.error")
 
@@ -23,6 +24,22 @@ RETRY_S = 10                  # délai minimal entre deux tentatives de reconnex
 _conn = None
 _lock = threading.Lock()
 _last_try = 0.0
+
+
+# Base créée avec une version antérieure de init.sql : on la met à niveau sans recréer le volume
+_MIGRATIONS = (
+    "ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS gas_ppm REAL",
+    "CREATE TABLE IF NOT EXISTS settings (key VARCHAR(20) PRIMARY KEY, value JSONB NOT NULL,"
+    " updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_by VARCHAR(32) NOT NULL)",
+    "ALTER TABLE commands ADD COLUMN IF NOT EXISTS detail VARCHAR(64)",
+    "ALTER TABLE commands ALTER COLUMN username TYPE VARCHAR(64)",
+    "ALTER TABLE commands DROP CONSTRAINT IF EXISTS commands_target_check",
+    "ALTER TABLE commands ADD CONSTRAINT commands_target_check"
+    " CHECK (target IN ('buzzer', 'led_red', 'led_green', 'auto', 'lcd'))",
+    "ALTER TABLE commands DROP CONSTRAINT IF EXISTS commands_action_check",
+    "ALTER TABLE commands ADD CONSTRAINT commands_action_check"
+    " CHECK (action IN ('on', 'off', 'auto', 'pulse', 'text'))",
+)
 
 
 def _connection():
@@ -37,8 +54,11 @@ def _connection():
     _last_try = time.time()
     try:
         _conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=3)
-        # base créée avant l'ajout des ppm : on ajoute la colonne sans recréer le volume
-        _conn.execute("ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS gas_ppm REAL")
+        for sql in _MIGRATIONS:
+            try:
+                _conn.execute(sql)
+            except psycopg.Error as e:       # une migration ratée ne doit pas couper la base
+                log.warning("[db] migration ignorée (%s) : %s", sql[:60], e)
         log.info("[db] connecté à PostgreSQL")
     except Exception as e:
         _conn = None
@@ -143,11 +163,29 @@ def recent_gas_raw(dev: str | None, seconds: int = 120) -> list[int] | None:
     return None if rows is None else [r[0] for r in rows]
 
 
-_CMD_TARGETS = {"buzzer", "led_red", "led_green", "auto"}
-_CMD_ACTIONS = {"on", "off", "auto", "pulse"}
+_CMD_TARGETS = {"buzzer", "led_red", "led_green", "auto", "lcd"}
+_CMD_ACTIONS = {"on", "off", "auto", "pulse", "text"}
 
 
-def log_command(target: str, action: str, by: str = "dashboard") -> None:
-    """Traçabilité des commandes envoyées depuis le dashboard (table commands)."""
+def log_command(target: str, action: str, by: str = "dashboard", detail: str | None = None) -> None:
+    """Traçabilité des commandes envoyées au boîtier, depuis le dashboard ou par une règle (table commands)."""
     if target in _CMD_TARGETS and action in _CMD_ACTIONS:
-        _run("INSERT INTO commands (username, target, action) VALUES (%s, %s, %s)", (by, target, action))
+        _run("INSERT INTO commands (username, target, action, detail) VALUES (%s, %s, %s, %s)",
+             (by[:64], target, action, detail[:64] if detail else None))
+
+
+def load_settings() -> list[tuple] | None:
+    """Lignes (clé, valeur, date, auteur) de la table settings ; None si la base est indisponible."""
+    return _run("SELECT key, value, updated_at, updated_by FROM settings", fetch="all")
+
+
+def save_settings(sections: dict, by: str) -> bool:
+    """Enregistre chaque section (vision, hours, rules) ; False si la base est indisponible."""
+    ok = True
+    for key, value in sections.items():
+        ok = bool(_run(
+            "INSERT INTO settings (key, value, updated_by) VALUES (%s, %s, %s)"
+            " ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by",
+            (key, Json(value), by[:32]),
+        )) and ok
+    return ok

@@ -30,7 +30,7 @@ export interface Sample {
 }
 
 export type Scenario = 'nominal' | 'overheat' | 'gas' | 'intrusion';
-export type TabId = 'supervision' | 'capteurs' | 'vision' | 'alertes' | 'commandes' | 'systeme';
+export type TabId = 'supervision' | 'capteurs' | 'vision' | 'alertes' | 'commandes' | 'regles' | 'systeme';
 export type LedId = 'green' | 'red';
 export type LedMode = 'auto' | 'on' | 'off';
 
@@ -65,8 +65,10 @@ export interface VisionState {
   threat: boolean;
   /** Durée de la présence en cours, en secondes */
   presentSecs: number;
-  /** Présence plus longue que le seuil de detect.py (--loiter) */
+  /** Présence plus longue que le seuil réglé dans l'onglet Règles */
   loitering: boolean;
+  /** En dehors des heures ouvrées : toute présence passe en critique */
+  offHours: boolean;
   /** Taille de l'image source, pour placer la boîte : [largeur, hauteur] */
   frame: [number, number];
   camera: string | null;
@@ -97,7 +99,38 @@ export interface Actuators {
 export type Command =
   | { target: 'buzzer'; action: 'pulse'; ms: number }
   | { target: 'led_red' | 'led_green'; action: LedMode }
-  | { target: 'auto'; action: 'on' | 'off' };
+  | { target: 'auto'; action: 'on' | 'off' }
+  | { target: 'lcd'; action: 'text'; text: string; s: number };
+
+/* Réglages de l'onglet « Règles » (GET/PUT /api/v1/settings, app/settings.py) */
+export type RuleEvent =
+  | 'danger_object' | 'intrusion_confirmed' | 'person' | 'loitering' | 'abandoned'
+  | 'motion' | 'off_hours' | 'overheat' | 'gas_leak' | 'anomaly' | 'any_critical';
+
+export interface Rule {
+  id?: string;
+  name: string;
+  event: RuleEvent;
+  enabled: boolean;
+  buzzer_ms: number;
+  lcd_text: string;
+  lcd_s: number;
+}
+
+export interface Settings {
+  vision: { loiter_s: number; abandon_s: number; confirm: number; person_conf: number; obj_conf: number };
+  hours: { start: string; end: string; days: number[] };
+  rules: { enabled: boolean; cooldown_s: number; items: Rule[] };
+}
+
+export interface SettingsResponse {
+  settings: Settings;
+  defaults: Settings;
+  updated_at: string | null;
+  updated_by: string | null;
+  persisted: boolean;
+  vision_sent?: boolean;
+}
 
 export interface Sentinel {
   mode: 'mock' | 'api';
@@ -120,6 +153,8 @@ export interface Sentinel {
   buzz: () => void;
   setLed: (led: LedId, mode: LedMode) => void;
   toggleAuto: () => void;
+  /** Affiche un texte quelques secondes sur le LCD 16×2 du boîtier ; résout false si non transmis */
+  sendLcd: (text: string, secs: number) => Promise<boolean>;
   commandError: string | null;
   /** Classification fournie par le service anomalies (mode api) ; null = déduite des tendances */
   aiClass: { type: string; proba: number } | null;

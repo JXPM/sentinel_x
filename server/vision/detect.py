@@ -7,6 +7,9 @@ Lit la webcam, détecte personnes et objets avec YOLOv8n, et sert au dashboard :
 Publie aussi les alertes caméra sur MQTT (sentinel/groupe1/cam-01/alert) : le pont de l'API
 les enregistre et les pousse au dashboard. La présence PIR est lue sur la télémétrie de l'ESP
 pour confirmer une intrusion (PIR + caméra).
+Les seuils et les heures ouvrées réglés dans l'onglet « Règles » du dashboard arrivent en message
+retenu sur sentinel/groupe1/cam-01/config : ils s'appliquent sans redémarrer (les options de la
+ligne de commande ne servent que de valeurs de départ).
 
 Utilisation :
   python detect.py --list          liste les caméras et enregistre une photo de chacune (camN.jpg)
@@ -37,6 +40,7 @@ DANGER = {"knife", "scissors", "baseball bat"}
 BAGS = {"backpack", "handbag", "suitcase"}
 INFO = {"backpack", "handbag", "suitcase", "laptop", "cell phone"}
 FR = {"knife": "couteau", "scissors": "ciseaux", "baseball bat": "batte"}
+FR_BAG = {"backpack": "sac à dos", "handbag": "sac à main", "suitcase": "valise"}
 
 
 def log(*a):
@@ -160,6 +164,7 @@ class Camera(threading.Thread):
 # =============================================================
 class Bus:
     def __init__(self, args):
+        self.args = args
         self.topic = args.topic.rstrip("/")
         self.pir = False
         self.pir_ts = 0.0
@@ -185,12 +190,16 @@ class Bus:
             log(f"[mqtt] connexion refusée : {reason_code}")
             return
         client.subscribe("sentinel/+/+/telemetry")
+        client.subscribe(self.topic + "/config", qos=1)
         log("[mqtt] connecté, alertes caméra sur " + self.topic + "/alert")
 
     def _on_message(self, client, userdata, msg):
         try:
             d = json.loads(msg.payload)
         except ValueError:
+            return
+        if msg.topic == self.topic + "/config":
+            apply_config(self.args, d)
             return
         self.pir = bool(d.get("presence", d.get("motion", False)))
         self.pir_ts = time.time()
@@ -203,6 +212,39 @@ class Bus:
         log(f"[alerte] {a['severity']} · {a['message']}")
         if self.client is not None:
             self.client.publish(self.topic + "/alert", json.dumps(a), qos=1)
+
+
+def apply_config(a, d):
+    """Réglages venus du dashboard : chaque valeur est bornée ici aussi, une valeur hors bornes est ignorée."""
+    if not isinstance(d, dict):
+        return
+    changed = []
+
+    def num(key, attr, lo, hi, cast):
+        v = d.get(key)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and lo <= v <= hi:
+            v = cast(v)
+            if getattr(a, attr) != v:
+                setattr(a, attr, v)
+                changed.append(f"{attr}={v}")
+
+    num("loiter_s", "loiter", 5, 600, float)
+    num("abandon_s", "abandon", 5, 600, float)
+    num("confirm", "confirm", 1, 10, int)
+    num("person_conf", "conf", 0.2, 0.95, float)
+    num("obj_conf", "obj_conf", 0.2, 0.95, float)
+    try:
+        start = datetime.time.fromisoformat(d["work_start"]) if "work_start" in d else a.work_start
+        end = datetime.time.fromisoformat(d["work_end"]) if "work_end" in d else a.work_end
+        days = d.get("work_days")
+        days = ",".join(str(int(x)) for x in days if 0 <= int(x) <= 6) if isinstance(days, list) else a.work_days
+        if start < end and (start, end, days) != (a.work_start, a.work_end, a.work_days):
+            a.work_start, a.work_end, a.work_days = start, end, days
+            changed.append(f"heures={start:%H:%M}-{end:%H:%M} jours={days or 'aucun'}")
+    except (TypeError, ValueError):
+        pass
+    if changed:
+        log("[réglages] " + ", ".join(changed))
 
 
 # =============================================================
@@ -242,7 +284,6 @@ class Detector(threading.Thread):
         log(f"[ia] chargement du modèle {a.model} (premier lancement : téléchargement)")
         model = YOLO(a.model)
         classes = list(CLASSES)
-        low = min(a.conf, a.obj_conf)
 
         seq, consec, threat_consec, miss = 0, 0, 0, 0
         present_since = None
@@ -250,12 +291,12 @@ class Detector(threading.Thread):
         bag_alone_since = None
         fps = 0.0
         last_t = time.time()
-        episode = {"warn": False, "fusion": False, "threat": False}
+        episode = {"warn": False, "fusion": False, "threat": False, "loiter": False}
+        abandon_alerted = False
         last_alert = {}
         last_log = 0.0
         # Heures ouvrées en heure de Paris : le conteneur, lui, est en UTC
         tz = ZoneInfo(a.tz)
-        work_days = {int(d) for d in a.work_days.split(",")}
         off_hours = False
         self.ready.set()
 
@@ -274,6 +315,8 @@ class Detector(threading.Thread):
             if frame is None:
                 continue
             t0 = time.time()
+            # Seuils relus à chaque image : le dashboard peut les changer à chaud (apply_config)
+            low = min(a.conf, a.obj_conf)
             r = model.predict(frame, imgsz=a.imgsz, conf=low, classes=classes, verbose=False)[0]
             total_ms = (time.time() - t0) * 1000
             infer_ms = float(r.speed.get("inference", total_ms))
@@ -292,6 +335,7 @@ class Detector(threading.Thread):
                         others.append({"label": label, "confidence": round(float(p), 2), "bbox": b})
 
             now = time.time()
+            work_days = {int(x) for x in a.work_days.split(",") if x.strip()}
             off_hours = is_off_hours(datetime.datetime.now(tz), a.work_start, a.work_end, work_days)
             h, w = frame.shape[:2]
             person = bool(persons)
@@ -307,7 +351,7 @@ class Detector(threading.Thread):
                     consec = 0
                 if present_since and now - last_person > 2:
                     present_since = None
-                    episode = {"warn": False, "fusion": False, "threat": False}
+                    episode = {"warn": False, "fusion": False, "threat": False, "loiter": False}
             confirm = min(consec, a.confirm)
             locked = person and confirm >= a.confirm
             present_s = round(now - present_since, 1) if present_since else 0
@@ -324,6 +368,8 @@ class Detector(threading.Thread):
                 bag_alone_since = None
             abandoned_s = round(now - bag_alone_since, 1) if bag_alone_since else 0
             abandoned = abandoned_s >= a.abandon
+            if not bag_alone_since:
+                abandon_alerted = False
 
             dt = now - last_t
             last_t = now
@@ -335,7 +381,8 @@ class Detector(threading.Thread):
                   "bbox": best[1], "confirm": confirm, "confirm_needed": a.confirm,
                   "objects": danger, "threat": threat, "info_objects": info,
                   "abandoned": abandoned, "abandoned_s": abandoned_s, "present_s": present_s,
-                  "loitering": present_s >= a.loiter, "off_hours": off_hours, "infer_ms": round(infer_ms, 1),
+                  "loitering": present_s >= a.loiter, "off_hours": off_hours,
+                  "loiter_s": a.loiter, "abandon_s": a.abandon, "infer_ms": round(infer_ms, 1),
                   "total_ms": round(total_ms, 1), "fps": round(fps, 1)}
             with self.lock:
                 self.status = st
@@ -345,18 +392,32 @@ class Detector(threading.Thread):
                 episode["warn"] = True
                 self.bus.alert(source="vision", type="intrusion", severity="critical" if off_hours else "warning",
                                dev=a.camera, message=hh(f"Personne détectée (confiance {fr2(best[0])})"),
-                               confidence=round(best[0], 2), data={"off_hours": off_hours})
+                               confidence=round(best[0], 2), data={"off_hours": off_hours, "reason": "person"})
             if locked and self.bus.pir_recent() and not episode["fusion"] and can_alert("fusion"):
                 episode["fusion"] = True
                 self.bus.alert(source="fusion", type="intrusion", severity="critical", dev=self.bus.device[:32],
                                message=hh("Le PIR et la caméra concordent : intrusion confirmée"),
-                               confidence=round(best[0], 2), data={"off_hours": off_hours})
+                               confidence=round(best[0], 2), data={"off_hours": off_hours, "reason": "fusion"})
             if threat and not episode["threat"] and can_alert("threat"):
                 episode["threat"] = True
                 top = max(danger, key=lambda o: o["confidence"])
                 self.bus.alert(source="vision", type="intrusion", severity="critical", dev=a.camera,
                                message=hh(f"Objet dangereux : {FR.get(top['label'], top['label'])} tenu par une personne"),
-                               confidence=top["confidence"], data={"off_hours": off_hours})
+                               confidence=top["confidence"], data={"off_hours": off_hours, "reason": "danger_object",
+                                                                   "object": top["label"]})
+            # Présence prolongée et objet abandonné : attention en journée, critique hors horaires
+            if present_s >= a.loiter and not episode["loiter"] and can_alert("loiter"):
+                episode["loiter"] = True
+                self.bus.alert(source="vision", type="intrusion", severity="critical" if off_hours else "warning",
+                               dev=a.camera, message=hh(f"Présence prolongée : personne devant la caméra depuis {present_s:.0f} s"),
+                               confidence=round(best[0], 2),
+                               data={"off_hours": off_hours, "reason": "loitering", "seconds": present_s})
+            if abandoned and not abandon_alerted and can_alert("abandon"):
+                abandon_alerted = True
+                bag = next((o["label"] for o in others if o["label"] in BAGS), "sac")
+                self.bus.alert(source="vision", type="anomaly", severity="critical" if off_hours else "warning",
+                               dev=a.camera, message=hh(f"Objet abandonné : {FR_BAG.get(bag, bag)} seul depuis {abandoned_s:.0f} s"),
+                               data={"off_hours": off_hours, "reason": "abandoned", "object": bag, "seconds": abandoned_s})
 
             if now - last_log > 10:
                 last_log = now

@@ -113,7 +113,7 @@ export function VisionCard({ s }: { s: Sentinel }) {
         ) : v.abandoned ? (
           <div className="hud-strip warn">OBJET ABANDONNÉ · {Math.round(v.abandonedSecs)} S</div>
         ) : v.person ? (
-          <div className="hud-strip alert">{!locked ? 'PRÉSENCE DÉTECTÉE · CONFIRMATION EN COURS' : pir ? 'INTRUSION CONFIRMÉE · PIR + CAMÉRA' : v.loitering ? 'PRÉSENCE PROLONGÉE · ' + Math.round(v.presentSecs) + ' S' : 'PRÉSENCE CONFIRMÉE · CAMÉRA'}</div>
+          <div className="hud-strip alert">{(locked && v.offHours ? 'HORS HORAIRES · ' : '') + (!locked ? 'PRÉSENCE DÉTECTÉE · CONFIRMATION EN COURS' : pir ? 'INTRUSION CONFIRMÉE · PIR + CAMÉRA' : v.loitering ? 'PRÉSENCE PROLONGÉE · ' + Math.round(v.presentSecs) + ' S' : 'PRÉSENCE CONFIRMÉE · CAMÉRA')}</div>
         ) : (
           <span className="hud-strip idle">BALAYAGE · AUCUNE CIBLE</span>
         )}

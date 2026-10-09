@@ -37,14 +37,24 @@ CREATE INDEX IF NOT EXISTS alerts_ts ON alerts (ts DESC);
 CREATE INDEX IF NOT EXISTS alerts_unacked ON alerts (ts DESC) WHERE acked_at IS NULL;
 
 -- Journal des commandes envoyées depuis le dashboard (traçabilité)
+-- username : compte du dashboard, ou « regle:<id> » quand une règle automatique a déclenché la commande
 CREATE TABLE IF NOT EXISTS commands (
     id       BIGSERIAL    PRIMARY KEY,
     ts       TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    username VARCHAR(32)  NOT NULL,
-    target   VARCHAR(20)  NOT NULL CHECK (target IN ('buzzer', 'led_red', 'led_green', 'auto')),
-    action   VARCHAR(20)  NOT NULL CHECK (action IN ('on', 'off', 'auto', 'pulse'))
+    username VARCHAR(64)  NOT NULL,
+    target   VARCHAR(20)  NOT NULL CHECK (target IN ('buzzer', 'led_red', 'led_green', 'auto', 'lcd')),
+    action   VARCHAR(20)  NOT NULL CHECK (action IN ('on', 'off', 'auto', 'pulse', 'text')),
+    detail   VARCHAR(64)              -- texte affiché sur le LCD
 );
 CREATE INDEX IF NOT EXISTS commands_ts ON commands (ts DESC);
+
+-- Réglages de l'onglet « Règles » (app/settings.py) : une ligne par section (vision, hours, rules)
+CREATE TABLE IF NOT EXISTS settings (
+    key        VARCHAR(20)  PRIMARY KEY,
+    value      JSONB        NOT NULL,
+    updated_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_by VARCHAR(32)  NOT NULL
+);
 
 -- Sorties du service anomalies (courbe du score d'anomalie)
 CREATE TABLE IF NOT EXISTS ai_scores (

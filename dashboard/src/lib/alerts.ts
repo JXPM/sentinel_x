@@ -10,6 +10,13 @@ const TITLES: Record<string, string> = {
   anomaly: 'Anomalie',
 };
 
+// Raison précise envoyée par la vision (data.reason) : plus parlante que le type seul
+const REASON_TITLES: Record<string, string> = {
+  danger_object: 'Objet dangereux',
+  loitering: 'Présence prolongée',
+  abandoned: 'Objet abandonné',
+};
+
 export interface AlertView {
   title: string;
   level: Level;
@@ -22,7 +29,9 @@ export interface AlertView {
 
 export function alertView(a: Alert): AlertView {
   const level = SEVERITY_LEVEL[a.severity];
-  const base = a.source === 'fusion' ? 'Intrusion confirmée' : TITLES[a.type] ?? 'Alerte';
+  const reason = typeof a.data?.reason === 'string' ? a.data.reason : '';
+  const base = a.source === 'fusion' ? 'Intrusion confirmée'
+    : REASON_TITLES[reason] ?? (a.data?.off_hours === true && a.type === 'intrusion' ? 'Présence hors horaires' : TITLES[a.type] ?? 'Alerte');
   return {
     title: base + (a.severity === 'critical' ? ' · critique' : ''),
     level,
